@@ -10,5 +10,14 @@ spinwright extract ../spinwright-sf --test static_frame/test/unit/test_index_hie
 
 
 
+  - optimize — one round. LLM profiles, picks the hot function, proposes ONE patch, measures, accepts-or-reverts. ~5–10k tokens.
+  Good for "show me what's possible here" with a known cost.
+  - run — full agent loop (up to budget.max_patches_proposed iterations, default 10), then full pytest regression check, then PR.md
+  assembly. ~30–100k tokens depending on how far it gets. Good for "do the real work."
+
+  Two flags worth knowing on run:
+  - --exclude-path /site-packages/numpy — keeps numpy out of cProfile's view so the LLM stares at static_frame code, not array
+  dispatch
+  - --skip-regression — skips the full pytest suite at the end (the suite is huge and slow on static-frame); useful while iterating
 
 

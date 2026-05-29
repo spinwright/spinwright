@@ -114,5 +114,14 @@ def run(args: argparse.Namespace) -> int:
         sys.stdout.write(json.dumps(payload, indent=2) + "\n")
     else:
         _print_human(wt, vr, callgrind=cg, callgrind_skip_reason=cg_skip_reason)
+        if vr.passed:
+            # Hint at the next step so the chain stays paste-able.
+            try:
+                rel = str(extraction.resolve().relative_to((workspace_root / "repo").resolve()))
+            except ValueError:
+                rel = str(extraction)
+            print()
+            print(f"  next: spinwright optimize {workspace_root} --extraction {rel}")
+            print(f"   or:  spinwright run      {workspace_root} --extraction {rel}")
 
     return 0 if vr.passed else 1
