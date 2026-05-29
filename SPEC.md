@@ -530,8 +530,8 @@ Spinwright is expected to handle:
 
 ## 17. Milestones
 
-1. **M1 — Extraction & measurement. ✅** Repo setup, eligibility checker, extraction (LLM-driven), wallclock measurement; Callgrind deferred to M2 (Linux required). End-to-end CLI (`prep`, `extract`, `measure`) working against any pip-installable Python repo.
-2. **M2 — Single-shot optimization.** Add Callgrind (Linux), cProfile / pyinstrument / line_profiler tools. Single-iteration loop: identify one bottleneck, propose one patch, accept-or-reject. No depth-first descent.
+1. **M1 — Extraction & measurement. ✅** Repo setup, eligibility checker, extraction (LLM-driven), wallclock measurement. End-to-end CLI (`prep`, `extract`, `measure`) working against any pip-installable Python repo.
+2. **M2 — Single-shot optimization. ✅ (mostly)** Callgrind (Linux, via two-run subtraction since the `CALLGRIND_*` macros need inline assembly), cProfile profiling, single-iteration optimization loop with profile→propose→measure→accept-or-revert via `spinwright optimize`. The orchestrator currently gates on median wallclock on every platform; switching it to the Callgrind gate on Linux is a small follow-up (already-built `measurement.callgrind` is wired into the `measure` CLI but not yet into the `optimize` decision path). pyinstrument and line_profiler tools deferred until needed — cProfile is the LLM's signal for now.
 3. **M3 — Depth-first descent.** Full agent loop with stacking and `explored` tracking. Linear-revert-then-bisect on regression. (Soft-accept is out — see Appendix A, Mod 6.)
 4. **M4 — PR assembly & local CLI.** PR body generation, branch creation, local-mode end-to-end run on static-frame.
 5. **M5 — GitHub Action.** Workflow template, secrets handling, artifact upload. Persistent `test_fixtures/spinwright/` and `bottleneck_history.json`.

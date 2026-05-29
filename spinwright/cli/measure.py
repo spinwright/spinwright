@@ -8,6 +8,7 @@ from pathlib import Path
 
 from spinwright import config as cfg_mod
 from spinwright import platform as platform_mod
+from spinwright.measurement import callgrind as callgrind_mod
 from spinwright.measurement import walltime
 from spinwright.measurement.runner import DriverError
 
@@ -46,15 +47,22 @@ def _resolve_extraction(workspace_root: Path, extraction_arg: str) -> Path:
     return p
 
 
-def _print_human(wt, vr, *, callgrind_skipped: bool) -> None:
+def _print_human(wt, vr, *, callgrind=None, callgrind_skip_reason=None) -> None:
     print("Wallclock:")
     print(f"  best:    {wt.best_seconds * 1e6:12.3f} us")
     print(f"  median:  {wt.median_seconds * 1e6:12.3f} us")
     print(f"  stddev:  {wt.stddev_seconds * 1e6:12.3f} us")
     print(f"  iters per repeat: {wt.iterations_per_repeat}")
     print(f"  repeats: {wt.repeats}")
-    if callgrind_skipped:
-        print("Callgrind: skipped (macOS — Linux-only metric)")
+    if callgrind is not None:
+        print("Callgrind:")
+        print(f"  per-call instructions: {callgrind.instructions:,}")
+        print(f"  autoscale iterations:  {callgrind.autoscale_iterations:,}")
+        print(f"  raw A (N+1 runs):      {callgrind.total_inst_at_n_plus_one:,}")
+        print(f"  raw B (1 run):         {callgrind.baseline_inst_at_one:,}")
+        print(f"  output file:           {callgrind.output_path}")
+    elif callgrind_skip_reason:
+        print(f"Callgrind: skipped ({callgrind_skip_reason})")
     print(f"Verify: {'PASSED' if vr.passed else 'FAILED'}")
     if vr.error:
         print("Verify error:")
@@ -76,18 +84,35 @@ def run(args: argparse.Namespace) -> int:
         print(e.stderr or e.stdout, file=sys.stderr)
         return 2
 
-    callgrind_skipped = platform_mod.is_macos()  # step 6 will gate this differently on Linux
+    cg = None
+    cg_skip_reason = None
+    if not platform_mod.is_linux():
+        cg_skip_reason = "macOS — Linux-only metric"
+    else:
+        try:
+            cg, cg_vr = callgrind_mod.measure_callgrind(
+                venv_python, extraction,
+                valgrind_path=cfg.measurement.callgrind_path,
+                autoscale_min_instructions=cfg.measurement.autoscale_min_instructions,
+                cwd=workspace_root / "repo",
+            )
+            # Prefer the callgrind verify result if it disagrees (unlikely; flagged).
+            if not cg_vr.passed and vr.passed:
+                vr = cg_vr
+        except callgrind_mod.CallgrindUnavailable as e:
+            cg_skip_reason = str(e)
 
     if args.json:
         payload = {
             "walltime": asdict(wt),
             "verify": asdict(vr),
-            "callgrind": None if callgrind_skipped else "not_yet_implemented",
+            "callgrind": asdict(cg) if cg is not None else None,
+            "callgrind_skip_reason": cg_skip_reason,
             "extraction": str(extraction),
             "workspace": str(workspace_root),
         }
         sys.stdout.write(json.dumps(payload, indent=2) + "\n")
     else:
-        _print_human(wt, vr, callgrind_skipped=callgrind_skipped)
+        _print_human(wt, vr, callgrind=cg, callgrind_skip_reason=cg_skip_reason)
 
     return 0 if vr.passed else 1

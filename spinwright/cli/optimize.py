@@ -39,6 +39,8 @@ def _resolve_extraction(workspace: workspace_mod.Workspace, extraction_arg: str)
 def _report(result: opt_mod.OptimizationResult) -> None:
     bw = result.baseline_walltime
     cw = result.candidate_walltime
+    bcg = result.baseline_callgrind
+    ccg = result.candidate_callgrind
     print()
     if result.accepted:
         print(f"Optimization ACCEPTED for {Path(result.nodeid_or_extraction).name}")
@@ -46,12 +48,21 @@ def _report(result: opt_mod.OptimizationResult) -> None:
         print(f"Optimization REJECTED for {Path(result.nodeid_or_extraction).name}")
         print(f"  reason: {result.rejection_reason}")
 
+    print(f"  gate metric: {result.gate_metric}")
     if bw is not None:
-        print(f"  baseline:  best={bw.best_seconds*1e6:.2f} us  median={bw.median_seconds*1e6:.2f} us  stddev={bw.stddev_seconds*1e6:.2f} us")
+        print(f"  baseline walltime:  best={bw.best_seconds*1e6:.2f} us  median={bw.median_seconds*1e6:.2f} us  stddev={bw.stddev_seconds*1e6:.2f} us")
     if cw is not None:
-        print(f"  candidate: best={cw.best_seconds*1e6:.2f} us  median={cw.median_seconds*1e6:.2f} us  stddev={cw.stddev_seconds*1e6:.2f} us")
+        print(f"  candidate walltime: best={cw.best_seconds*1e6:.2f} us  median={cw.median_seconds*1e6:.2f} us  stddev={cw.stddev_seconds*1e6:.2f} us")
+    if result.relative_walltime_improvement is not None:
+        print(f"  walltime delta:     {result.relative_walltime_improvement:+.2%}")
+    if bcg is not None:
+        print(f"  baseline callgrind:  {bcg.instructions:,} inst/call  (N={bcg.autoscale_iterations:,})")
+    if ccg is not None:
+        print(f"  candidate callgrind: {ccg.instructions:,} inst/call  (N={ccg.autoscale_iterations:,})")
+    if result.relative_callgrind_improvement is not None:
+        print(f"  callgrind delta:    {result.relative_callgrind_improvement:+.2%}")
     if result.relative_improvement is not None:
-        print(f"  delta:     {result.relative_improvement:+.2%} (threshold {result.threshold:.0%})")
+        print(f"  primary delta:      {result.relative_improvement:+.2%} (threshold {result.threshold:.0%})")
     if result.commit_sha:
         print(f"  commit:    {result.commit_sha}")
     if result.reverted_paths:
@@ -62,7 +73,6 @@ def _report(result: opt_mod.OptimizationResult) -> None:
               f"cache_w={c.cache_creation_input_tokens} cache_r={c.cache_read_input_tokens}")
         print(f"  turns:     {len(c.turns)}  stop_reason={c.stop_reason}")
     if result.diff and not result.accepted:
-        # Show the rejected diff so the user can see what the LLM tried.
         snippet = "\n".join(result.diff.splitlines()[:40])
         print("  attempted diff (first 40 lines):")
         for line in snippet.splitlines():
