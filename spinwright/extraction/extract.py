@@ -223,10 +223,19 @@ def _sanity_check(ws: Workspace, extraction_path: Path) -> tuple[bool, str | Non
 
 def _write_notes(*, notes_path: Path, ws: Workspace, nodeid: str, test_meta: dict) -> None:
     now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    # Convert the source path to repo-relative so absolute paths (which include
+    # /Users/<name>/...) don't end up committed to the target repo's history.
+    src_path = Path(test_meta["path"])
+    try:
+        src_rel = str(src_path.resolve().relative_to(ws.repo_dir.resolve()))
+    except ValueError:
+        # Source lives outside the repo somehow — keep the basename only, not
+        # the absolute path with usernames embedded.
+        src_rel = src_path.name
     notes_path.write_text(
         f"# Extraction notes for `{nodeid}`\n\n"
         f"- Source nodeid: `{nodeid}`\n"
-        f"- Source path: `{test_meta['path']}`\n"
+        f"- Source path (repo-relative): `{src_rel}`\n"
         f"- Source kind: {test_meta['kind']}\n"
         f"- Source commit SHA: `{ws.base_sha}`\n"
         f"- Extraction date (UTC): {now}\n"

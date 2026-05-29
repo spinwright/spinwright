@@ -46,18 +46,34 @@ def _resolve_workspace(workspace_arg: str) -> workspace_mod.Workspace:
     return ws
 
 
-def _report(result: extract_mod.ExtractionResult) -> None:
+def _rel_to(path: Path | None, base: Path) -> str:
+    """Render ``path`` relative to ``base`` if possible; fall back to absolute.
+    Used so the CLI doesn't print /Users/<name>/... — keeps reports paste-able
+    into bug threads and matches how downstream commands expect paths."""
+    if path is None:
+        return ""
+    try:
+        return str(path.resolve().relative_to(base.resolve()))
+    except ValueError:
+        return str(path)
+
+
+def _report(result: extract_mod.ExtractionResult, ws: workspace_mod.Workspace) -> None:
     if result.success:
+        repo_rel_ext = _rel_to(result.extraction_path, ws.repo_dir)
+        repo_rel_notes = _rel_to(result.notes_path, ws.repo_dir)
         print()
         print(f"Extraction succeeded for {result.nodeid}")
-        print(f"  path:    {result.extraction_path}")
-        print(f"  notes:   {result.notes_path}")
-        print(f"  commit:  {result.commit_sha}")
+        print(f"  extraction (repo-relative): {repo_rel_ext}")
+        print(f"  notes (repo-relative):      {repo_rel_notes}")
+        print(f"  commit:                     {result.commit_sha}")
         if result.conversation:
             c = result.conversation
             print(f"  tokens:  in={c.input_tokens} out={c.output_tokens} "
                   f"cache_w={c.cache_creation_input_tokens} cache_r={c.cache_read_input_tokens}")
             print(f"  turns:   {len(c.turns)}  stop_reason={c.stop_reason}")
+        print()
+        print(f"  measure it with: spinwright measure {ws.root} --extraction {repo_rel_ext}")
         return
 
     print()
@@ -98,5 +114,5 @@ def run(
         config=cfg,
         client=client,
     )
-    _report(result)
+    _report(result, ws)
     return 0 if result.success else 1
