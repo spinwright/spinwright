@@ -20,10 +20,16 @@ class Workspace:
 def _git(repo_dir: Path, *args: str, check: bool = True) -> str:
     result = subprocess.run(
         ["git", "-C", str(repo_dir), *args],
-        check=check,
         capture_output=True,
         text=True,
     )
+    if check and result.returncode != 0:
+        # subprocess.CalledProcessError's default str() drops stderr, which is
+        # where git puts its actual error message. Re-raise so the user sees it.
+        raise RuntimeError(
+            f"git {' '.join(args)} failed (rc={result.returncode}): "
+            f"{result.stderr.strip() or result.stdout.strip()}"
+        )
     return result.stdout.strip()
 
 

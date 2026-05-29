@@ -22,6 +22,17 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Comma-separated optional extras to install (e.g. 'dev,test').",
     )
+    p_prep.add_argument(
+        "--requirements", "-r",
+        action="append",
+        default=[],
+        metavar="REPO_RELATIVE_PATH",
+        help=(
+            "Path (repo-relative) to a requirements or lock file to install "
+            "after the editable install. Repeatable. E.g. "
+            "`--requirements requirements-dev.txt -r requirements/test.txt`."
+        ),
+    )
     p_prep.add_argument("--config", default=None, help="Path to spinwright.toml.")
 
     p_extract = sub.add_parser(
@@ -30,11 +41,20 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Run the LLM-driven extraction agent against one test. The repo arg "
             "can be either a URL/path to clone (a fresh workspace is prepped) or "
-            "a path to an existing `spinwright prep` workspace (reused in place)."
+            "a path to an existing `spinwright prep` workspace (reused in place). "
+            "If --test is omitted, the slowest eligible test from the target's "
+            "pytest suite is selected automatically (SPEC §5.1)."
         ),
     )
     p_extract.add_argument("repo", help="Path or URL of the target repo, OR an existing workspace path.")
-    p_extract.add_argument("--test", required=True, help="Pytest nodeid to extract.")
+    p_extract.add_argument(
+        "--test", default=None,
+        help="Pytest nodeid to extract. If omitted, the slowest eligible test is auto-selected.",
+    )
+    p_extract.add_argument(
+        "--list-candidates", action="store_true",
+        help="Print discovered slow + eligible tests and exit without extracting.",
+    )
     p_extract.add_argument("--config", default=None, help="Path to spinwright.toml.")
 
     p_measure = sub.add_parser("measure", help="Measure an extracted harness.")
@@ -45,6 +65,36 @@ def build_parser() -> argparse.ArgumentParser:
                            help="Override config measurement.walltime_repeats.")
     p_measure.add_argument("--json", action="store_true",
                            help="Emit the result as a JSON object on stdout (for scripting).")
+
+    p_run = sub.add_parser(
+        "run",
+        help="Full agent loop: profile, optimize, repeat, then regression-check.",
+        description=(
+            "End-to-end M3 pipeline against an already-extracted harness. "
+            "Auto-detects an existing workspace or preps a fresh one. "
+            "Iterates the LLM optimization agent up to budget.max_patches_proposed times, "
+            "then runs the full pytest suite and drops any patch that breaks tests."
+        ),
+    )
+    p_run.add_argument("repo", help="Path or URL of the target repo, OR an existing workspace path.")
+    p_run.add_argument("--extraction", required=True, help="Path to extraction module.")
+    p_run.add_argument("--config", default=None, help="Path to spinwright.toml.")
+    p_run.add_argument(
+        "--exclude-path", action="append", default=[],
+        help="Substring excluded from profile output (repeatable).",
+    )
+    p_run.add_argument(
+        "--skip-regression", action="store_true",
+        help="Skip the full-suite regression check at the end of the loop.",
+    )
+    p_run.add_argument(
+        "--no-pr", action="store_true",
+        help="Skip the PR assembly + publish step (still writes the run directory).",
+    )
+    p_run.add_argument(
+        "--runs-dir", default="./spinwright-runs",
+        help="Directory for per-run artifact subdirectories.",
+    )
 
     p_optimize = sub.add_parser(
         "optimize",
@@ -85,6 +135,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "optimize":
         from spinwright.cli import optimize
         return optimize.run(args)
+    if args.command == "run":
+        from spinwright.cli import run
+        return run.run(args)
 
     parser.error(f"unknown command: {args.command}")
     return 2

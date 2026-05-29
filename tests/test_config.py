@@ -26,7 +26,9 @@ def test_default_modification_knobs_present():
 def test_from_dict_partial_keeps_defaults():
     cfg = config.from_dict({"target": {"repo_url": "https://example.com/x"}})
     assert cfg.target.repo_url == "https://example.com/x"
-    assert cfg.target.ref == "main"
+    # Empty default — workspace.create() then skips `git checkout` and leaves
+    # the clone on the remote default branch (which may be main, master, etc.).
+    assert cfg.target.ref == ""
     assert cfg.corpus.dir == "test_fixtures/spinwright"
 
 

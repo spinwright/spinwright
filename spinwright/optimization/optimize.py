@@ -9,6 +9,7 @@ from spinwright.llm.client import ClientProtocol
 from spinwright.llm.dispatch import ConversationResult, run_conversation
 from spinwright.measurement import callgrind as callgrind_mod
 from spinwright.measurement import walltime
+from spinwright.measurement.runner import DriverError
 from spinwright.measurement.types import CallgrindResult, VerifyResult, WalltimeResult
 from spinwright.repo import venv as venv_mod
 from spinwright.repo import workspace as workspace_mod
@@ -19,6 +20,23 @@ from spinwright.tools import git, registry
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FocusHint:
+    """A specific function the orchestrator wants the LLM to start with.
+
+    ``qualname`` is best-effort — cProfile reports a bare ``funcname`` plus
+    ``filename`` and ``lineno``; the orchestrator may not be able to derive
+    a dotted module path reliably (e.g., functions inside conditional blocks).
+    """
+
+    funcname: str
+    filename: str
+    lineno: int
+    qualname: str | None = None     # Best-effort dotted name; may be None.
+    cumtime_seconds: float | None = None  # From the picking profile, if any.
+    explored_key: str = ""          # Stable key for `explored` membership.
 
 
 @dataclass
@@ -51,6 +69,7 @@ def optimize_once(
     client: ClientProtocol,
     model: str | None = None,
     extra_excludes: tuple[str, ...] = (),
+    focus_hint: FocusHint | None = None,
 ) -> OptimizationResult:
     """Run one round of the optimization agent against ``extraction_path``.
 
@@ -105,12 +124,14 @@ def optimize_once(
         threshold=threshold,
         extra_excludes=extra_excludes,
         primary_metric=primary_metric,
+        focus_hint=focus_hint,
     )
     user_message = _build_user_message(
         extraction_path=extraction_path,
         baseline_wt=baseline_wt,
         baseline_cg=baseline_cg,
         callgrind_disabled_reason=callgrind_disabled_reason,
+        focus_hint=focus_hint,
     )
     chosen_model = model or config.models.reasoning
 
@@ -146,10 +167,39 @@ def optimize_once(
             extraction_path=extraction_path,
         )
 
-    candidate_wt, candidate_vr, candidate_cg, _ = _dual_measure(
-        venv_python, extraction_path, repeats=repeats, cwd=ws.repo_dir,
-        config=config, callgrind_enabled=(baseline_cg is not None),
-    )
+    try:
+        candidate_wt, candidate_vr, candidate_cg, _ = _dual_measure(
+            venv_python, extraction_path, repeats=repeats, cwd=ws.repo_dir,
+            config=config, callgrind_enabled=(baseline_cg is not None),
+        )
+    except DriverError as e:
+        # The LLM's edit broke the extraction (import error, syntax error,
+        # whatever). Treat as a rejected candidate and revert cleanly.
+        revert = git.git_revert_all(ws.repo_dir)
+        return OptimizationResult(
+            accepted=False,
+            nodeid_or_extraction=str(extraction_path),
+            baseline_walltime=baseline_wt,
+            candidate_walltime=None,
+            baseline_callgrind=baseline_cg,
+            candidate_callgrind=None,
+            candidate_verify=VerifyResult(
+                passed=False,
+                error=f"candidate measurement failed (driver rc={e.returncode}): "
+                      f"{(e.stderr or e.stdout)[-500:]}",
+            ),
+            relative_improvement=None,
+            relative_walltime_improvement=None,
+            relative_callgrind_improvement=None,
+            gate_metric=primary_metric,
+            threshold=threshold,
+            diff=diff,
+            commit_sha=None,
+            rejection_reason="candidate measurement crashed — likely broken edit",
+            conversation=conversation,
+            extraction_path=extraction_path,
+            reverted_paths=revert.reverted_paths,
+        )
     rel_wt = _relative_walltime_improvement(baseline_wt, candidate_wt)
     rel_cg = _relative_callgrind_improvement(baseline_cg, candidate_cg)
     rel_primary = rel_cg if primary_metric == "callgrind_instructions" else rel_wt
@@ -364,7 +414,11 @@ End the turn with a brief one-sentence summary of what you changed and why.
 
 
 def _build_system_prompt(
-    *, threshold: float, extra_excludes: tuple[str, ...], primary_metric: str
+    *,
+    threshold: float,
+    extra_excludes: tuple[str, ...],
+    primary_metric: str,
+    focus_hint: FocusHint | None,
 ) -> str:
     label = _metric_label(primary_metric)
     note = (
@@ -379,6 +433,14 @@ def _build_system_prompt(
         primary_metric_label=label,
         callgrind_note=note,
     )
+    if focus_hint is not None:
+        base += (
+            "\n\nThe orchestrator picked a starting focus for you based on "
+            "the current profile (see the user message). Spend your edit budget "
+            "on that function or its in-package callees. If you can see a clearly "
+            "better hotspot elsewhere, you may switch — but say why in your "
+            "final summary."
+        )
     if extra_excludes:
         base += "\nSuggested profile excludes for this repo: " + ", ".join(
             f"`{e}`" for e in extra_excludes
@@ -392,6 +454,7 @@ def _build_user_message(
     baseline_wt: WalltimeResult,
     baseline_cg: CallgrindResult | None,
     callgrind_disabled_reason: str | None,
+    focus_hint: FocusHint | None = None,
 ) -> str:
     lines = [
         f"Extraction to optimize: `{extraction_path}`",
@@ -411,10 +474,19 @@ def _build_user_message(
         ])
     elif callgrind_disabled_reason:
         lines.extend(["", f"(Callgrind disabled: {callgrind_disabled_reason})"])
+    if focus_hint is not None:
+        lines.extend(["", "Focus suggested by the orchestrator (top of current profile):"])
+        if focus_hint.qualname:
+            lines.append(f"- qualname:    `{focus_hint.qualname}`")
+        lines.append(f"- function:    `{focus_hint.funcname}`")
+        lines.append(f"- file:        `{focus_hint.filename}`")
+        lines.append(f"- line:        {focus_hint.lineno}")
+        if focus_hint.cumtime_seconds is not None:
+            lines.append(f"- cumtime:     {focus_hint.cumtime_seconds * 1e6:.2f} us (cumulative across iterations)")
     lines.extend([
         "",
-        "Start by profiling. Identify the hottest function in the target "
-        "package's own code. Read its source, propose ONE edit, sanity-check "
-        "it, and end the turn.",
+        "Start by reading the focus function (use `read_source` with its "
+        "qualname, or `profile_cprofile` if you want to see the full ranking). "
+        "Propose ONE edit, sanity-check it with run_python, and end the turn.",
     ])
     return "\n".join(lines)

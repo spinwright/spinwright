@@ -17,6 +17,7 @@ def _load_config(path: str | None) -> cfg_mod.Config:
 def run(args: argparse.Namespace) -> int:
     cfg = _load_config(args.config)
     extras = tuple(e for e in args.extras.split(",") if e) if args.extras else ()
+    requirements = tuple(args.requirements or ())
 
     ref = args.ref or (cfg.target.ref if cfg.target.ref else None)
     print(f"cloning {args.repo!r} (ref={ref or 'HEAD'}) ...", file=sys.stderr)
@@ -33,7 +34,15 @@ def run(args: argparse.Namespace) -> int:
 
     print("creating venv + installing target ...", file=sys.stderr)
     venv.create(ws)
-    venv.install_target(ws, extras=extras)
+    if extras:
+        print(f"  extras:        {','.join(extras)}", file=sys.stderr)
+    for rel in requirements:
+        print(f"  requirements:  {rel}", file=sys.stderr)
+    try:
+        venv.install_target(ws, extras=extras, requirements_files=requirements)
+    except FileNotFoundError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
 
     # stdout: just the workspace path, so it can be captured in shell pipes.
     sys.stdout.write(str(ws.root) + "\n")
