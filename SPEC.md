@@ -120,12 +120,11 @@ If Spinwright later needs to support non-Python target repos, the language-speci
 If the user supplies a test nodeid (either pytest-style `tests/test_foo.py::test_bar` or unittest-style `tests/test_foo.py::TestThing::test_bar`), use it directly; eligibility is still checked (§5.2).
 
 Otherwise:
-1. Run `pytest --collect-only -q` to enumerate tests. Pytest natively collects both pytest functions and `unittest.TestCase` subclasses, so this works for either style.
-2. Run the full suite with `--durations=0 -p no:randomly` and parse durations.
-3. Filter to tests with duration ≥ T_slow (default: 100 ms).
-4. Filter to tests that pass the eligibility check (§5.2).
-5. Pass remaining candidates (name, docstring, source) to the LLM with a ranking prompt: "Which of these tests is most likely to exercise hot code paths that have meaningful optimization headroom?" Return the top K (default: 5).
-6. The orchestrator iterates through ranked candidates in order until one yields an accepted patch or all are exhausted.
+1. Run the full suite once with `pytest --durations=0 -p no:randomly --tb=no -q` and parse the durations table. A single invocation enumerates every test that ran AND records each test's call-phase wall time, so we don't need a separate `--collect-only` pass. Pytest natively collects both pytest functions and `unittest.TestCase` subclasses, so this works for either style. (Tests that fail at collection or are skipped don't appear; a user can still target them explicitly via `--test`.)
+2. Filter to tests with call-phase duration ≥ T_slow (default: 100 ms).
+3. Filter to tests that pass the eligibility check (§5.2).
+4. Pass remaining candidates (name, docstring, source) to the LLM with a ranking prompt: "Which of these tests is most likely to exercise hot code paths that have meaningful optimization headroom?" Return the top K (default: 5).
+5. The orchestrator iterates through ranked candidates in order until one yields an accepted patch or all are exhausted.
 
 ### 5.2 Eligibility (Skip Conditions)
 
@@ -133,11 +132,11 @@ A test is **ineligible** for extraction if it:
 
 - **(pytest-style)** Uses any pytest fixture in its function signature, other than `tmp_path` (which we handle by materializing a `tempfile.mkdtemp()` in `setup()`).
 - **(pytest-style)** Is decorated with `@pytest.mark.parametrize`, `@pytest.mark.skip*`, or any marker that changes how the test is invoked.
-- **(unittest-style)** Is a method on a `unittest.TestCase` subclass whose `setUp`/`setUpClass`/`tearDown`/`tearDownClass` methods are non-trivial (anything beyond `pass` or a simple attribute assignment that we can duplicate into our `setup()`).
-- Imports from `hypothesis` or uses `@given`.
-- Calls into network, filesystem (outside `tempfile`), or subprocess operations.
+- **(unittest-style)** Is a method on a `unittest.TestCase` subclass whose `setUp`/`setUpClass`/`tearDown`/`tearDownClass` methods are non-trivial (anything beyond `pass`, a simple attribute assignment, or a `super().setUp()` call that we can duplicate into our `setup()`).
+- Imports from `hypothesis` or uses `@given`. (Import-level rule.)
+- Imports symbols from a sibling `conftest.py` (v1 limitation; v1.5 may resolve and inline these). (Import-level rule.)
+- *Calls* into network, filesystem (outside `tempfile`), or subprocess operations *in the test body or its helpers*. (Call-site rule — module-level `import subprocess` alone does not disqualify the test, only an actual `subprocess.run(...)` in the test path does. Files commonly bundle utilities used by a subset of tests; rejecting the whole module would shrink the candidate pool too aggressively.)
 - Uses unseeded randomness (`random.*` without a prior `random.seed`, or `np.random.*` without a prior `np.random.seed`).
-- Imports symbols from a sibling `conftest.py` (v1 limitation; v1.5 may resolve and inline these).
 
 Eligibility is checked by a combination of AST inspection (deterministic, runs first) and an LLM check (handles cases like unseeded randomness inside imported helper functions, or unittest setup methods whose triviality the AST check can't confidently judge).
 
@@ -187,20 +186,32 @@ On a subsequent run targeting the same test, if `{corpus_dir}/<test_id>.py` exis
 
 For each measurement of an extracted test:
 
-- **Callgrind instruction count.** `valgrind --tool=callgrind --instr-atstart=no` invoking a small driver that does `setup()`, toggles instrumentation on, runs `run(state)` once, toggles off, then calls `verify(state)`. The instruction count is read from the callgrind output file. **This is the primary metric.** Deterministic across runs; insensitive to system load.
-- **Wall-clock time.** `timeit` over `run(state)` with N iterations (auto-tuned so total wall time is between 1 and 5 seconds), repeated K times (default K=5). Report best, median, stddev. Used as a sanity check and reported in the PR, but not the gate.
+- **Callgrind instruction count (Linux only).** `valgrind --tool=callgrind --instr-atstart=no` invokes a small driver that does `setup()`, toggles instrumentation on, runs `run(state)` *N* times where *N* is auto-scaled (see §6.2), toggles off, then calls `verify(state)`. The instruction count is read from the callgrind output file and divided by *N* to report per-call instructions. **This is the primary metric on Linux.** Deterministic across runs; insensitive to system load.
+- **Wall-clock time.** `timeit.Timer.autorange` picks an iteration count *N* such that one repeat takes ≥ 0.2 s, then runs *K* repeats (default *K*=5). Reports best, median, stddev. The sanity check on Linux; the **primary metric on macOS** (see §6.4).
 
-Both measurements use the same extracted module; only the driver differs.
+Both measurements use the same extracted module; only the driver differs. Each measurement runs in a **fresh subprocess** of the target venv's Python — no in-process reuse across measurements. This isolates module-cache state, GC behavior, and import order from prior runs, and contains crashes in patched code so the orchestrator can recover.
 
-### 6.2 Improvement Threshold
+### 6.2 Auto-Scaling
 
-A patch is **accepted** if the Callgrind instruction count for `run` decreases by at least 20% relative to the current baseline, with the full test suite still passing.
+Single-shot Callgrind on a fast `run()` (sub-millisecond) buries the operation in Python interpreter and dispatch overhead, producing noisy per-call instruction counts. The driver therefore runs `run(state)` *N* times inside the instrumented region with *N* chosen so total instructions ≥ 1×10⁹ (configurable as `measurement.autoscale_min_instructions`). *N* is estimated from a cheap pre-measurement wall-time probe and then divided out of the reported per-call count. This mirrors `timeit.Timer.autorange`'s amortization logic.
+
+### 6.3 Improvement Threshold
+
+A patch is **accepted** if the Callgrind per-call instruction count for `run` decreases by at least 20% relative to the current baseline, with the full test suite still passing.
 
 Within a single Spinwright run, multiple accepted patches stack; each new patch is measured against the cumulative baseline (i.e., with prior accepted patches applied). The final PR-level improvement reported is from the original baseline to the final cumulative state.
 
-### 6.3 Verification of Correctness
+### 6.4 macOS Fallback
 
-After `run` executes under Callgrind, `verify(state)` is called. If `verify` raises, the measurement is considered invalid and the patch is rejected — regardless of instruction count.
+Valgrind has no working Apple Silicon port and recent x86_64 Darwin support is broken in practice. On macOS, Spinwright **skips Callgrind entirely** and reports only wallclock numbers. This means the macOS path is local-dev feedback, not the authoritative gate: the canonical gate (≥ 20% Callgrind instruction reduction) is only enforced on Linux, where Callgrind works. Run the agent loop on Linux for shippable results; use macOS for the extraction step and for ad-hoc wallclock sanity checks.
+
+### 6.5 Verification of Correctness
+
+After `run` executes under measurement, `verify(state)` is called. If `verify` raises, the measurement is considered invalid and the patch is rejected — regardless of instruction count or wall time.
+
+### 6.6 Baseline Caching
+
+Measurements are cached under `{corpus_dir}/.spinwright/baselines.json` keyed by `(extraction_blob_sha, target_source_sha)`. If neither has changed since a prior run, we reuse the cached baseline instead of re-measuring (Callgrind in particular is expensive — 10–100× slowdown on the instrumented region).
 
 ## 7. The Agent Loop
 
@@ -423,19 +434,20 @@ Run ID: {run_id}.
 ## 11. CLI
 
 ```
-spinwright run <repo_url> [options]
-spinwright run . --test tests/test_index.py::test_loc_to_iloc_large
-spinwright extract . --test tests/test_index.py::test_foo
-spinwright measure . --extraction {corpus_dir}/test_foo.py
-spinwright report <run_id>
+spinwright prep    <repo_url_or_path>                          # clone + venv + install, prints workspace path
+spinwright extract <repo_or_workspace> --test <nodeid>         # LLM-driven extraction, auto-detects workspace reuse
+spinwright measure <workspace> --extraction {corpus_dir}/<id>.py
+spinwright run     <repo_url> [options]                        # full agent loop (M3+)
+spinwright report  <run_id>                                    # M6
 ```
 
 Flags:
 - `--config PATH`
 - `--test NODEID`           (skip discovery; target this test)
 - `--dry-run`               (do everything but the PR open)
-- `--keep-workspace`        (don't delete the working directory)
 - `--verbose` / `--quiet`
+
+`extract` auto-detects whether its first arg is a path to an existing prep'd workspace (has `.venv/bin/python` and `repo/.git`) and reuses it in place; otherwise it preps a fresh one. Workspaces from `prep` and `extract` are always kept on disk (the user just paid for an LLM extraction); cleanup is on the caller.
 
 ## 12. GitHub Action
 
@@ -514,14 +526,37 @@ Spinwright is expected to handle:
 1. The "filter out NumPy / stdlib" rule for hot-function selection — implement as a module-path prefix check (target package only) or also allow descending into pure-Python dependencies?
 2. Threshold for `slow_threshold_seconds` may need per-repo tuning; consider adaptive selection (e.g., top P% by duration rather than absolute threshold).
 3. Whether to allow the agent to read `git log` / `git blame` on candidate hot functions, which could inform reasoning ("this was last touched 5 years ago and pre-dates a NumPy API that would now be faster").
-4. Conftest discovery for extracted tests when the test's module imports from a sibling conftest — for v1, treat any conftest import as ineligible.
-5. Final shape of the "soft accept" promotion rule (§7.3.5); may need empirical tuning.
+4. Conftest discovery for extracted tests when the test's module imports from a sibling conftest — default for v1 is "ineligible", configurable via `eligibility.allow_pure_conftest_imports`.
 
 ## 17. Milestones
 
-1. **M1 — Extraction & measurement.** Repo setup, eligibility checker, extraction (LLM-driven), Callgrind + timeit measurement. End-to-end on a single hand-picked static-frame test, no agent loop yet, no PR.
-2. **M2 — Single-shot optimization.** Add cProfile / pyinstrument / line_profiler tools. Single-iteration loop: identify one bottleneck, propose one patch, accept-or-reject. No depth-first descent.
-3. **M3 — Depth-first descent.** Full agent loop with stacking, soft-accept, and `explored` tracking. Bisect-and-revert on regression.
+1. **M1 — Extraction & measurement. ✅** Repo setup, eligibility checker, extraction (LLM-driven), wallclock measurement; Callgrind deferred to M2 (Linux required). End-to-end CLI (`prep`, `extract`, `measure`) working against any pip-installable Python repo.
+2. **M2 — Single-shot optimization.** Add Callgrind (Linux), cProfile / pyinstrument / line_profiler tools. Single-iteration loop: identify one bottleneck, propose one patch, accept-or-reject. No depth-first descent.
+3. **M3 — Depth-first descent.** Full agent loop with stacking and `explored` tracking. Linear-revert-then-bisect on regression. (Soft-accept is out — see Appendix A, Mod 6.)
 4. **M4 — PR assembly & local CLI.** PR body generation, branch creation, local-mode end-to-end run on static-frame.
 5. **M5 — GitHub Action.** Workflow template, secrets handling, artifact upload. Persistent `test_fixtures/spinwright/` and `bottleneck_history.json`.
 6. **M6 — Hardening.** Failure-mode handling, budget enforcement, structured logging, run-summary reporting.
+
+## Appendix A. Modifications adopted from M1 planning
+
+Recorded during the M1 plan review (see `~/.claude/plans/lets-implement-spinwright-see-splendid-llama.md`). Items 1–3 and 7 are reflected inline above; the rest are listed here because their corresponding subsystems aren't built yet, but the design they imply is fixed and should be honored when the milestone arrives.
+
+| # | Modification | Status in v1 |
+|---|--------------|--------------|
+| 1 | **macOS measurement fallback.** Skip Callgrind entirely on Darwin; wallclock only. Linux remains the canonical metric. | §6.4 |
+| 2 | **Callgrind auto-scaling.** Pick *N* so total instructions ≥ 1×10⁹; report per-call as total/*N*. | §6.2 |
+| 3 | **Measurements run as fresh subprocesses.** No in-process reuse. | §6.1 |
+| 4 | **Edit tool replaces unified-diff `apply_patch`.** Tool shape: `edit_file(path, old_string, new_string)` with uniqueness check; orchestrator reconstructs unified diffs for PR bodies. | Implemented in M1's `tools.edit_file`; relevant from M2 onward. |
+| 5 | **Model tiering.** Sonnet 4.6 for classification (eligibility second-pass, candidate ranking); Opus 4.7 for reasoning (extraction, bottleneck ID, patch proposal); Haiku 4.5 for summarization. | Config knobs live in `config.models.{reasoning,classification,summarization}`; extraction uses reasoning today. |
+| 6 | **Drop "soft accept".** Only patches with ≥ 20% individual Callgrind improvement are accepted. Removes the §7.3.5 promotion rule from the original draft. | Codified now; relevant from M3. |
+| 7 | **Single-run pytest discovery.** One invocation with `--durations=0` enumerates and times every test that ran. (The original draft had a separate `--collect-only` pass; that pass only finds tests but doesn't time them, so it can't be merged with the durations run — instead it's redundant and removed entirely. Tests that fail at collection or are skipped won't appear in discovery, which is fine because the user can target them explicitly via `--test`.) | §5.1 |
+| 8 | **Baseline caching.** `(extraction_blob_sha, target_source_sha) → baseline` under `{corpus_dir}/.spinwright/baselines.json`. | §6.6; relevant from M2. |
+| 9 | **Linear-revert before bisect.** Try reverting each accepted patch individually first; fall back to bisect only when no single revert restores green. | §17 (M3 description); relevant from M3. |
+| 10 | **Reframe iteration budget.** Drop ambiguous `max_iterations=30`; use `max_patches_proposed` and `max_descents_per_focus`. | Config knobs live; relevant from M3. |
+| 11 | **Sandbox: subprocess + temp dir.** Working tree under `tempfile.mkdtemp()`; `edit_file` validates the path is inside it; every measurement is a subprocess. No Docker dep for v1. | Implemented in M1's `repo.workspace`, `tools.edit`, `measurement.runner`. |
+| 12 | **Conftest carve-out flag.** `eligibility.allow_pure_conftest_imports`; default False. | §5.2; configurable. |
+
+### Additional revisions discovered during M1 implementation
+
+- **Eligibility narrowing (§5.2).** Network/subprocess/filesystem ineligibility is **call-site only**, not import-level. The original wording would over-reject test modules that import `subprocess` for one test but use only pure-Python paths in the test we're targeting. Only `hypothesis` and `conftest` are import-level rules per spec.
+- **Sanity check after extraction.** The LLM-driven extraction is post-validated by running `setup → run → verify` once inside the target venv before NOTES.md is written or the commit lands. Broken extractions are not committed; the failure is reported back to the caller for retry or escalation.
