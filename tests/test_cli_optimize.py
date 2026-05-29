@@ -105,7 +105,7 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
     (venv / "bin" / "python").symlink_to(Path(sys.executable))
     (repo / "target_pkg").mkdir(parents=True)
     (repo / "target_pkg" / "__init__.py").write_text(textwrap.dedent(_SLOW).lstrip("\n"))
-    extractions = repo / "test_fixtures" / "spinwright"
+    extractions = repo / "spinwright"
     extractions.mkdir(parents=True)
     (extractions / "__init__.py").write_text("")
     ext_path = extractions / "demo.py"

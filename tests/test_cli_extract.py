@@ -146,125 +146,12 @@ def verify(state):
 # ---------------------------------------------------------------------------
 
 
-def _add_pytest_suite(ws: Workspace) -> None:
-    """Add a few tests of varying durations so discovery can find them."""
-    (ws.repo_dir / "tests").mkdir(exist_ok=True)
-    (ws.repo_dir / "tests" / "test_speeds.py").write_text(textwrap.dedent("""
-        import time
-        import pytest
-
-        def test_slow_eligible():
-            time.sleep(0.2)
-            assert sum(i * i for i in range(10)) == 285
-
-        def test_slower_but_ineligible(my_fixture):
-            time.sleep(0.3)
-            assert my_fixture is not None
-
-        @pytest.fixture
-        def my_fixture():
-            return object()
-
-        def test_fast():
-            assert True
-    """).lstrip("\n"))
-    subprocess.run(["git", "-C", str(ws.repo_dir), "add", "."],
-                   check=True, capture_output=True)
-    subprocess.run(
-        ["git", "-C", str(ws.repo_dir),
-         "-c", "user.email=x@x", "-c", "user.name=x",
-         "commit", "-m", "add tests"],
-        check=True, capture_output=True,
-    )
-
-
-def test_extract_cli_lists_candidates_without_extracting(tmp_path: Path, capsys):
-    ws = _make_workspace(tmp_path)
-    # Replace the .venv stub with a real-venv-shaped symlink so pytest is
-    # findable on PATH for discovery.
-    venv_dir = ws.root / ".venv"
-    if venv_dir.is_symlink() or venv_dir.exists():
-        if venv_dir.is_symlink() or venv_dir.is_file():
-            venv_dir.unlink()
-        else:
-            import shutil
-            shutil.rmtree(venv_dir)
-    venv_dir.symlink_to(Path(sys.executable).parent.parent, target_is_directory=True)
-    _add_pytest_suite(ws)
-
-    args = argparse.Namespace(
-        repo=str(ws.root),
-        test=None,
-        list_candidates=True,
-        config=None,
-    )
-    client = FakeClient()  # never called for --list-candidates
-    rc = cli_extract.run(args, client_factory=lambda: client)
-    out = capsys.readouterr().out
-    assert rc == 0
-    assert "Eligible candidates" in out
-    assert "test_slow_eligible" in out
-    assert "Rejected candidates" in out
-    assert "test_slower_but_ineligible" in out
-    # The LLM wasn't called
-    assert client.messages.calls == []
-
-
-def test_extract_cli_auto_selects_when_test_omitted(tmp_path: Path, capsys):
-    ws = _make_workspace(tmp_path)
-    venv_dir = ws.root / ".venv"
-    if venv_dir.is_symlink() or venv_dir.exists():
-        if venv_dir.is_symlink() or venv_dir.is_file():
-            venv_dir.unlink()
-        else:
-            import shutil
-            shutil.rmtree(venv_dir)
-    venv_dir.symlink_to(Path(sys.executable).parent.parent, target_is_directory=True)
-    # Lower the slow threshold so test_slow_eligible qualifies even on a fast
-    # box; we want discovery to find it deterministically.
-    cfg_path = tmp_path / "spinwright.toml"
-    cfg_path.write_text("[test_selection]\nslow_threshold_seconds = 0.05\n")
-    _add_pytest_suite(ws)
-
-    # Auto-selection should pick `test_slow_eligible` (slowest eligible).
-    # The fake LLM scripts a successful extraction so the run reports success.
-    target = str(
-        (ws.repo_dir / "test_fixtures" / "spinwright"
-         / "tests_test_speeds__test_slow_eligible.py").resolve()
-    )
-    extraction = (
-        "import time\n"
-        "def setup(): return {}\n"
-        "def run(state): time.sleep(0)\n"
-        "def verify(state): assert sum(i * i for i in range(10)) == 285\n"
-    )
-    client = FakeClient()
-    client.messages.queue(
-        FakeMessage(content=[FakeToolUse(id="tu_1", name="write_file",
-                                          input={"path": target, "content": extraction})],
-                    stop_reason="tool_use"),
-        FakeMessage(content=[FakeText(text="done")], stop_reason="end_turn"),
-    )
-
-    args = argparse.Namespace(
-        repo=str(ws.root),
-        test=None,
-        list_candidates=False,
-        config=str(cfg_path),
-    )
-    rc = cli_extract.run(args, client_factory=lambda: client)
-    err = capsys.readouterr().err
-    assert "Auto-selected" in err
-    assert "test_slow_eligible" in err
-    assert rc == 0
-
-
 def test_extract_cli_reuses_existing_workspace_and_succeeds(tmp_path: Path, capsys):
     ws = _make_workspace(tmp_path)
-    # Default config uses corpus.dir = "test_fixtures/spinwright"; the CLI test
+    # Default config uses corpus.dir = "spinwright"; the CLI test
     # exercises that default path (test_extract.py's narrower tests override it).
     target = str(
-        (ws.repo_dir / "test_fixtures" / "spinwright"
+        (ws.repo_dir / "spinwright"
          / "tests_test_mod__test_sum_of_squares.py").resolve()
     )
 
@@ -279,15 +166,14 @@ def test_extract_cli_reuses_existing_workspace_and_succeeds(tmp_path: Path, caps
     )
 
     args = argparse.Namespace(
-        repo=str(ws.root),
+        workspace=str(ws.root),
         test="tests/test_mod.py::test_sum_of_squares",
-        list_candidates=False,
         config=None,
     )
     rc = cli_extract.run(args, client_factory=lambda: client)
     assert rc == 0
     captured = capsys.readouterr()
-    assert "reusing workspace" in captured.err
+    assert "using workspace at" in captured.err
     assert "Extraction succeeded" in captured.out
     assert "tests_test_mod__test_sum_of_squares.py" in captured.out
     # Real commit on the working branch
@@ -312,9 +198,8 @@ def test_extract_cli_reports_ineligible_test_without_calling_llm(tmp_path: Path,
     client = FakeClient()  # no responses — extract should never call create()
 
     args = argparse.Namespace(
-        repo=str(ws.root),
+        workspace=str(ws.root),
         test="tests/test_mod.py::test_param",
-        list_candidates=False,
         config=None,
     )
     rc = cli_extract.run(args, client_factory=lambda: client)
@@ -333,9 +218,8 @@ def test_extract_cli_handles_missing_api_key(tmp_path: Path, capsys):
         raise cli_extract.client_mod.MissingAPIKeyError("no key")
 
     args = argparse.Namespace(
-        repo=str(ws.root),
+        workspace=str(ws.root),
         test="tests/test_mod.py::test_sum_of_squares",
-        list_candidates=False,
         config=None,
     )
     rc = cli_extract.run(args, client_factory=boom)

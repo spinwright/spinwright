@@ -16,6 +16,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Clone a repo into a workspace and install it in a fresh venv.",
     )
     p_prep.add_argument("repo", help="Path or URL of the target repo.")
+    p_prep.add_argument(
+        "--workspace", "-w",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Explicit workspace path. Created if it doesn't exist; must be "
+            "empty if it does. If omitted, a tempfile.mkdtemp() under TMPDIR "
+            "is used. Handy for local iteration: set this to a stable path "
+            "and re-target the same workspace across runs."
+        ),
+    )
     p_prep.add_argument("--ref", default=None, help="Git ref to check out (default: clone HEAD).")
     p_prep.add_argument(
         "--extras",
@@ -35,25 +46,56 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_prep.add_argument("--config", default=None, help="Path to spinwright.toml.")
 
-    p_extract = sub.add_parser(
-        "extract",
-        help="Extract a test into a measurement harness.",
+    p_candidates = sub.add_parser(
+        "candidates",
+        help="Discover slow + eligible tests in a workspace.",
         description=(
-            "Run the LLM-driven extraction agent against one test. The repo arg "
-            "can be either a URL/path to clone (a fresh workspace is prepped) or "
-            "a path to an existing `spinwright prep` workspace (reused in place). "
-            "If --test is omitted, the slowest eligible test from the target's "
-            "pytest suite is selected automatically (SPEC §5.1)."
+            "Run pytest with --durations=0 in the workspace's venv, then run "
+            "AST eligibility on each slow test. Prints the candidate list so "
+            "you can pick a test to feed into `spinwright extract --test`. "
+            "Does not write or modify anything."
         ),
     )
-    p_extract.add_argument("repo", help="Path or URL of the target repo, OR an existing workspace path.")
-    p_extract.add_argument(
-        "--test", default=None,
-        help="Pytest nodeid to extract. If omitted, the slowest eligible test is auto-selected.",
+    p_candidates.add_argument(
+        "workspace", help="Path to a workspace built by `spinwright prep`.")
+    p_candidates.add_argument(
+        "--test-path", action="append", default=[],
+        metavar="REPO_RELATIVE_PATH",
+        help=(
+            "Constrain discovery to a subset of the test tree. Passed as a "
+            "positional pytest argument; repeatable."
+        ),
     )
+    p_candidates.add_argument(
+        "--json", action="store_true",
+        help="Emit a JSON document instead of the human-readable list.",
+    )
+    p_candidates.add_argument(
+        "--nodeids", action="store_true",
+        help=(
+            "Print eligible nodeids only, one per line, sorted by duration "
+            "desc. Pipes cleanly into other tools."
+        ),
+    )
+    p_candidates.add_argument(
+        "--limit", type=int, default=50,
+        help="Max entries per section in human output (default: 50).",
+    )
+    p_candidates.add_argument("--config", default=None, help="Path to spinwright.toml.")
+
+    p_extract = sub.add_parser(
+        "extract",
+        help="Extract one specific test into a measurement harness.",
+        description=(
+            "Run the LLM-driven extraction agent against one test in an existing "
+            "workspace. Use `spinwright candidates` first to find a test to feed "
+            "in via --test."
+        ),
+    )
+    p_extract.add_argument("workspace", help="Path to a workspace built by `spinwright prep`.")
     p_extract.add_argument(
-        "--list-candidates", action="store_true",
-        help="Print discovered slow + eligible tests and exit without extracting.",
+        "--test", required=True,
+        help="Pytest nodeid to extract (use `spinwright candidates` to find one).",
     )
     p_extract.add_argument("--config", default=None, help="Path to spinwright.toml.")
 
@@ -70,13 +112,14 @@ def build_parser() -> argparse.ArgumentParser:
         "run",
         help="Full agent loop: profile, optimize, repeat, then regression-check.",
         description=(
-            "End-to-end M3 pipeline against an already-extracted harness. "
-            "Auto-detects an existing workspace or preps a fresh one. "
-            "Iterates the LLM optimization agent up to budget.max_patches_proposed times, "
-            "then runs the full pytest suite and drops any patch that breaks tests."
+            "End-to-end M3 pipeline against an already-extracted harness in an "
+            "existing workspace. Build the workspace with `spinwright prep`. "
+            "Iterates the LLM optimization agent up to budget.max_patches_proposed "
+            "times, then runs the full pytest suite and drops any patch that "
+            "breaks tests."
         ),
     )
-    p_run.add_argument("repo", help="Path or URL of the target repo, OR an existing workspace path.")
+    p_run.add_argument("workspace", help="Path to a workspace built by `spinwright prep`.")
     p_run.add_argument("--extraction", required=True, help="Path to extraction module.")
     p_run.add_argument("--config", default=None, help="Path to spinwright.toml.")
     p_run.add_argument(
@@ -126,6 +169,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "prep":
         from spinwright.cli import prep
         return prep.run(args)
+    if args.command == "candidates":
+        from spinwright.cli import candidates
+        return candidates.run(args)
     if args.command == "extract":
         from spinwright.cli import extract
         return extract.run(args)

@@ -144,7 +144,7 @@ If a candidate is ineligible, log the reason and move to the next candidate.
 
 ### 5.3 Extraction
 
-For an eligible test, the agent (LLM-driven, using `tools.read_source`, `tools.write_file`, and `tools.run_python`) produces a new module under the **configured corpus directory** (see §9). The default is `test_fixtures/spinwright/`, but for repos like static-frame the configured path would be `static_frame/test/spinwright/`. Throughout this SPEC, `{corpus_dir}` refers to that configured path.
+For an eligible test, the agent (LLM-driven, using `tools.read_source`, `tools.write_file`, and `tools.run_python`) produces a new module under the **configured corpus directory** (see §9). The default is `spinwright/` at the repo root — the contents are uniquely spinwright's (setup/run/verify harnesses named after their source nodeid) so a plain top-level name reads honestly. Repos that prefer the corpus nested under their own test tree can override (e.g., `static_frame/test/spinwright/`). Throughout this SPEC, `{corpus_dir}` refers to that configured path.
 
 ```
 {corpus_dir}/<sanitized_test_id>.py
@@ -291,7 +291,7 @@ These are the tools exposed to the LLM. All return structured data; large output
   Runs the AST-based eligibility check.
 
 - `write_extraction(test_id: str, module_source: str, notes: str) -> path`
-  Writes the extracted module and `NOTES.md` to `test_fixtures/spinwright/`, commits on the working branch.
+  Writes the extracted module and `NOTES.md` to `{corpus_dir}/` (default `spinwright/`), commits on the working branch.
 
 ### 8.3 Measurement
 
@@ -349,7 +349,7 @@ ref = "master"
 [corpus]
 # Directory inside the target repo where extracted tests are stored
 # and committed. For static-frame: "static_frame/test/spinwright".
-dir = "test_fixtures/spinwright"
+dir = "spinwright"
 
 [test_selection]
 slow_threshold_seconds = 0.1
@@ -534,7 +534,7 @@ Spinwright is expected to handle:
 2. **M2 — Single-shot optimization. ✅ (mostly)** Callgrind (Linux, via two-run subtraction since the `CALLGRIND_*` macros need inline assembly), cProfile profiling, single-iteration optimization loop with profile→propose→measure→accept-or-revert via `spinwright optimize`. The orchestrator currently gates on median wallclock on every platform; switching it to the Callgrind gate on Linux is a small follow-up (already-built `measurement.callgrind` is wired into the `measure` CLI but not yet into the `optimize` decision path). pyinstrument and line_profiler tools deferred until needed — cProfile is the LLM's signal for now.
 3. **M3 — Agent loop + regression check. ✅ (BFS, not DFS)** Full agent loop with `explored` tracking, focus-hinted optimization, linear-revert-with-drop-all fallback on regression, `spinwright run` end-to-end CLI. (Soft-accept is out — see Appendix A, Mod 6.) Depth-first descent into callees within a function is deferred until `line_profiler` lands — the current loop is BFS over top-cumtime functions in the target package, which is the practical equivalent without line-level profiling. Multi-patch bisect refinement (when no single revert restores green) is also deferred; the fallback is conservative drop-all.
 4. **M4 — PR assembly & local CLI. ✅** PR title + body rendering (SPEC §10 template), per-run artifact directory under `./spinwright-runs/<run_id>/` with `PR.md` and `run_summary.json`, local-mode that always writes PR.md, github_action-mode that pushes the branch and calls `gh pr create --body-file` (falls back to local with a clear reason when `gh` is missing or `git push` fails). Wired into `spinwright run` with `--no-pr` and `--runs-dir` flags.
-5. **M5 — GitHub Action.** Workflow template, secrets handling, artifact upload. Persistent `test_fixtures/spinwright/` and `bottleneck_history.json`.
+5. **M5 — GitHub Action.** Workflow template, secrets handling, artifact upload. Persistent `{corpus_dir}/` (default `spinwright/`) and `bottleneck_history.json`.
 6. **M6 — Hardening.** Failure-mode handling, budget enforcement, structured logging, run-summary reporting.
 
 ## Appendix A. Modifications adopted from M1 planning

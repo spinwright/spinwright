@@ -1,0 +1,14 @@
+
+
+spinwright prep git@github.com:static-frame/static-frame.git -r requirements-dev-3_14.txt -w ../spinwright-sf
+
+
+spinwright candidates ../spinwright-sf --test-path static_frame/test/unit
+
+
+spinwright extract ../spinwright-sf --test static_frame/test/unit/test_index_hierarchy_set_utils.py::TestUnit::test_index_hierarchy_union
+
+
+
+
+

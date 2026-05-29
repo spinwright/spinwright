@@ -46,8 +46,27 @@ def create(
     branch_prefix: str,
     branch_suffix: str,
     keep: bool = False,
+    root: Path | None = None,
 ) -> Workspace:
-    root = Path(tempfile.mkdtemp(prefix="spinwright-"))
+    """Build a workspace from a repo source.
+
+    ``root`` controls where the workspace lives:
+      - ``None`` (default): ``tempfile.mkdtemp(prefix="spinwright-")``
+      - explicit ``Path``: that exact directory. Created if it doesn't exist;
+        must be empty otherwise (we refuse to clobber).
+    """
+    if root is None:
+        root = Path(tempfile.mkdtemp(prefix="spinwright-"))
+    else:
+        root = root.expanduser().resolve()
+        if root.exists():
+            if any(root.iterdir()):
+                raise FileExistsError(
+                    f"workspace path {root} exists and is not empty — "
+                    "remove it first or pick a different path"
+                )
+        else:
+            root.mkdir(parents=True)
     repo_dir = root / "repo"
     venv_dir = root / ".venv"
 

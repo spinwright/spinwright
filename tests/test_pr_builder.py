@@ -101,10 +101,10 @@ def _loop_result(*iterations: OptimizationResult,
 
 def _meta(tmp_path: Path, nodeid: str = "tests/test_x.py::test_foo") -> builder.ExtractionMetadata:
     return builder.ExtractionMetadata(
-        extraction_path=tmp_path / "test_fixtures" / "spinwright" / "ext.py",
+        extraction_path=tmp_path / "spinwright" / "ext.py",
         original_nodeid=nodeid,
         source_commit_sha="abc123def4567890",
-        corpus_dir="test_fixtures/spinwright",
+        corpus_dir="spinwright",
     )
 
 

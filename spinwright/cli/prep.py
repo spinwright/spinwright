@@ -4,6 +4,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from pathlib import Path
+
 from spinwright import config as cfg_mod
 from spinwright.repo import venv, workspace
 
@@ -20,14 +22,20 @@ def run(args: argparse.Namespace) -> int:
     requirements = tuple(args.requirements or ())
 
     ref = args.ref or (cfg.target.ref if cfg.target.ref else None)
+    explicit_root = Path(args.workspace).expanduser() if args.workspace else None
     print(f"cloning {args.repo!r} (ref={ref or 'HEAD'}) ...", file=sys.stderr)
-    ws = workspace.create(
-        source=args.repo,
-        ref=ref,
-        branch_prefix=cfg.pr.branch_prefix,
-        branch_suffix="prep",
-        keep=True,
-    )
+    try:
+        ws = workspace.create(
+            source=args.repo,
+            ref=ref,
+            branch_prefix=cfg.pr.branch_prefix,
+            branch_suffix="prep",
+            keep=True,
+            root=explicit_root,
+        )
+    except FileExistsError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     print(f"  workspace: {ws.root}", file=sys.stderr)
     print(f"  base sha:  {ws.base_sha}", file=sys.stderr)
     print(f"  branch:    {ws.branch}", file=sys.stderr)

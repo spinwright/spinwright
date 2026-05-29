@@ -71,3 +71,60 @@ def test_install_target_rejects_missing_requirements_file(tmp_path: Path):
             requirements_files=("requirements-nope.txt",),
         )
     workspace.cleanup(ws)
+
+
+def test_workspace_create_uses_explicit_root(tmp_path: Path):
+    src = _tiny_src_repo(tmp_path)
+    explicit = tmp_path / "my-named-workspace"
+    ws = workspace.create(
+        source=str(src), ref=None,
+        branch_prefix="spinwright/", branch_suffix="explicit",
+        keep=True,
+        root=explicit,
+    )
+    assert ws.root == explicit.resolve()
+    assert (ws.root / "repo" / ".git").exists()
+    workspace.cleanup(ws)
+
+
+def test_workspace_create_makes_parent_dirs_for_explicit_root(tmp_path: Path):
+    src = _tiny_src_repo(tmp_path)
+    nested = tmp_path / "deeply" / "nested" / "ws"
+    ws = workspace.create(
+        source=str(src), ref=None,
+        branch_prefix="spinwright/", branch_suffix="explicit",
+        keep=True,
+        root=nested,
+    )
+    assert ws.root == nested.resolve()
+    workspace.cleanup(ws)
+
+
+def test_workspace_create_refuses_nonempty_explicit_root(tmp_path: Path):
+    src = _tiny_src_repo(tmp_path)
+    explicit = tmp_path / "ws"
+    explicit.mkdir()
+    (explicit / "existing.txt").write_text("hi")
+    with pytest.raises(FileExistsError, match="not empty"):
+        workspace.create(
+            source=str(src), ref=None,
+            branch_prefix="spinwright/", branch_suffix="explicit",
+            keep=True,
+            root=explicit,
+        )
+
+
+def test_workspace_create_accepts_empty_existing_explicit_root(tmp_path: Path):
+    """The user might `mkdir` it ahead of time (e.g., to set perms) — that's
+    fine as long as it's empty."""
+    src = _tiny_src_repo(tmp_path)
+    explicit = tmp_path / "ws"
+    explicit.mkdir()  # exists but empty
+    ws = workspace.create(
+        source=str(src), ref=None,
+        branch_prefix="spinwright/", branch_suffix="explicit",
+        keep=True,
+        root=explicit,
+    )
+    assert ws.root == explicit.resolve()
+    workspace.cleanup(ws)

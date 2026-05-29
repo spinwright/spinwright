@@ -29,7 +29,7 @@ def test_from_dict_partial_keeps_defaults():
     # Empty default — workspace.create() then skips `git checkout` and leaves
     # the clone on the remote default branch (which may be main, master, etc.).
     assert cfg.target.ref == ""
-    assert cfg.corpus.dir == "test_fixtures/spinwright"
+    assert cfg.corpus.dir == "spinwright"
 
 
 def test_from_dict_full_round_trips():
@@ -103,7 +103,7 @@ def test_load_from_toml_file(tmp_path: Path):
     assert cfg.target.ref == "release"
     assert cfg.measurement.improvement_threshold == 0.25
     # Untouched section keeps defaults.
-    assert cfg.corpus.dir == "test_fixtures/spinwright"
+    assert cfg.corpus.dir == "spinwright"
 
 
 def test_load_rejects_missing_file(tmp_path: Path):

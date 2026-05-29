@@ -122,9 +122,9 @@ def test_select_focus_skips_files_outside_repo(tmp_path: Path):
 
 def test_select_focus_skips_extraction_harness(tmp_path: Path):
     repo = tmp_path / "repo"
-    (repo / "test_fixtures" / "spinwright").mkdir(parents=True)
+    (repo / "spinwright").mkdir(parents=True)
     prof = _profile(
-        _entry("harness", str(repo / "test_fixtures" / "spinwright" / "x.py"), cumtime=99.0),
+        _entry("harness", str(repo / "spinwright" / "x.py"), cumtime=99.0),
         _entry("user_func", str(repo / "pkg" / "mod.py"), cumtime=0.1),
     )
     focus = loop._select_focus(prof, repo, explored=[])
@@ -240,7 +240,7 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
     (venv / "bin" / "python").symlink_to(Path(sys.executable))
     (repo / "target_pkg").mkdir(parents=True)
     (repo / "target_pkg" / "__init__.py").write_text(textwrap.dedent(_TARGET_PKG).lstrip("\n"))
-    extractions = repo / "test_fixtures" / "spinwright"
+    extractions = repo / "spinwright"
     extractions.mkdir(parents=True)
     (extractions / "__init__.py").write_text("")
     ext_path = extractions / "demo.py"

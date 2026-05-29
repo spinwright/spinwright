@@ -106,7 +106,7 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
     (repo / "target_pkg" / "__init__.py").write_text(textwrap.dedent(_TARGET).lstrip("\n"))
     (repo / "tests").mkdir()
     (repo / "tests" / "test_target.py").write_text(textwrap.dedent(_SUITE).lstrip("\n"))
-    extractions = repo / "test_fixtures" / "spinwright"
+    extractions = repo / "spinwright"
     extractions.mkdir(parents=True)
     (extractions / "__init__.py").write_text("")
     ext_path = extractions / "demo.py"
@@ -157,7 +157,7 @@ def test_run_cli_drives_loop_and_regression(tmp_path: Path, capsys):
         walltime_repeats = 3
     """))
     args = argparse.Namespace(
-        repo=str(ws.root),
+        workspace=str(ws.root),
         extraction=str(ext_path),
         config=str(cfg_path),
         exclude_path=[],
@@ -251,7 +251,7 @@ def test_run_cli_drops_regressing_patch(tmp_path: Path, capsys):
         walltime_repeats = 3
     """))
     args = argparse.Namespace(
-        repo=str(ws_with_new_base.root),
+        workspace=str(ws_with_new_base.root),
         extraction=str(ext_path),
         config=str(cfg_path),
         exclude_path=[],
@@ -276,7 +276,7 @@ def test_run_cli_handles_missing_api_key(tmp_path: Path, capsys):
         raise cli_run.client_mod.MissingAPIKeyError("no key")
 
     args = argparse.Namespace(
-        repo=str(ws.root),
+        workspace=str(ws.root),
         extraction=str(ext_path),
         config=None,
         exclude_path=[],
