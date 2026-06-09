@@ -1,0 +1,58 @@
+# Spinwright caller workflow — drop this at .github/workflows/spinwright.yml
+# in the target repo.
+#
+# This is a thin caller stub that delegates the actual pipeline to spinwright's
+# reusable workflow at <owner>/spinwright/.github/workflows/optimize.yml.
+# Spinwright owns the pipeline definition; you own the inputs and secrets.
+#
+# Required repository secrets:
+#   ANTHROPIC_API_KEY  — used by the LLM steps.
+#   GITHUB_TOKEN       — auto-provided by Actions, no setup needed.
+#
+# Customization:
+#   - Replace `OWNER` (twice) with the GitHub org/user that hosts the
+#     spinwright fork you trust.
+#   - Pin the `@ref` to a release tag (e.g. `@v0.1.0`) in production so
+#     pipeline updates don't silently change CI behavior.
+#   - Once spinwright is on PyPI, drop the `spinwright_install_spec` line.
+
+name: spinwright
+
+on:
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Pytest nodeid to optimize (optional; auto-selected if blank)"
+        required: false
+        default: ""
+      test_path:
+        description: "Constrain auto-selection to this repo-relative path"
+        required: false
+        default: ""
+      requirements:
+        description: "Repo-relative path to a requirements file (e.g. requirements-test.txt)"
+        required: false
+        default: ""
+      extras:
+        description: "Comma-separated optional extras (e.g. 'dev,test')"
+        required: false
+        default: ""
+      exclude_path:
+        description: "Substring filtered out of cProfile output (e.g. /site-packages/numpy)"
+        required: false
+        default: ""
+
+jobs:
+  optimize:
+    uses: OWNER/spinwright/.github/workflows/optimize.yml@main
+    with:
+      test:         ${{ inputs.test }}
+      test_path:    ${{ inputs.test_path }}
+      requirements: ${{ inputs.requirements }}
+      extras:       ${{ inputs.extras }}
+      exclude_path: ${{ inputs.exclude_path }}
+      # Pre-PyPI: pin to a specific spinwright ref via a git URL.
+      # Remove this line once `pip install spinwright` works.
+      spinwright_install_spec: 'git+https://github.com/OWNER/spinwright.git@main'
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

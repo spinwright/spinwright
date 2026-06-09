@@ -1,0 +1,216 @@
+# Spinwright reusable optimization workflow.
+#
+# Target repos call this from their own workflow with:
+#   jobs:
+#     optimize:
+#       uses: <owner>/spinwright/.github/workflows/optimize.yml@<ref>
+#       with:
+#         test: …                  # optional
+#       secrets:
+#         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+#
+# See examples/github-action.yml in the spinwright repo for a copy-pasteable
+# caller stub. The `<ref>` should be pinned (a release tag like `v0.1.0`)
+# in production so spinwright workflow updates don't silently change what
+# CI does on the target repo.
+
+name: spinwright optimize (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      test:
+        type: string
+        required: false
+        default: ""
+        description: "Pytest nodeid to optimize. If blank, auto-select."
+      test_path:
+        type: string
+        required: false
+        default: ""
+        description: "Constrain auto-selection to this repo-relative path."
+      requirements:
+        type: string
+        required: false
+        default: ""
+        description: "Repo-relative path to a requirements file."
+      extras:
+        type: string
+        required: false
+        default: ""
+        description: "Comma-separated optional extras (e.g. 'dev,test')."
+      exclude_path:
+        type: string
+        required: false
+        default: ""
+        description: "Substring filtered out of cProfile output (e.g. /site-packages/numpy)."
+      spinwright_install_spec:
+        type: string
+        required: false
+        default: "spinwright"
+        description: |
+          Argument passed to `pip install`. Default 'spinwright' assumes PyPI.
+          For pre-PyPI: 'git+https://github.com/<owner>/spinwright.git@<ref>'.
+      python_version:
+        type: string
+        required: false
+        default: "3.11"
+        description: "Python version for the workspace's venv."
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+        description: "Anthropic API key for the LLM steps."
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  spinwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          # spinwright commits onto a working branch and reads HEAD; needs
+          # full history rather than a shallow clone.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Install valgrind (for Linux Callgrind gate)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+
+      - name: Install spinwright
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '${{ inputs.spinwright_install_spec }}'
+
+      - name: Write spinwright.toml
+        run: |
+          cat > /tmp/spinwright.toml <<EOF
+          [pr]
+          # The action handles git push + gh pr create from this checkout
+          # (which already has actions/checkout's credential helper wired up).
+          # spinwright run just writes PR.md and stays out of the auth tangle.
+          mode = "local"
+          base_branch = "${{ github.event.repository.default_branch }}"
+          branch_prefix = "spinwright/"
+
+          [corpus]
+          dir = "spinwright"
+
+          [test_selection]
+          slow_threshold_seconds = 0.05
+          EOF
+
+      - name: Prep workspace
+        id: prep
+        run: |
+          PREP_ARGS=(--workspace /tmp/sw-ws --config /tmp/spinwright.toml)
+          if [ -n "${{ inputs.requirements }}" ]; then
+            PREP_ARGS+=(--requirements "${{ inputs.requirements }}")
+          fi
+          if [ -n "${{ inputs.extras }}" ]; then
+            PREP_ARGS+=(--extras "${{ inputs.extras }}")
+          fi
+          spinwright prep "$GITHUB_WORKSPACE" "${PREP_ARGS[@]}"
+          echo "ws=/tmp/sw-ws" >> "$GITHUB_OUTPUT"
+
+      - name: Choose target nodeid
+        id: choose
+        run: |
+          if [ -n "${{ inputs.test }}" ]; then
+            echo "explicit nodeid: ${{ inputs.test }}"
+            echo "nodeid=${{ inputs.test }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CAND_ARGS=(--nodeids --config /tmp/spinwright.toml)
+          if [ -n "${{ inputs.test_path }}" ]; then
+            CAND_ARGS+=(--test-path "${{ inputs.test_path }}")
+          fi
+          NODEID=$(spinwright candidates "${{ steps.prep.outputs.ws }}" "${CAND_ARGS[@]}" | head -1)
+          if [ -z "$NODEID" ]; then
+            echo "::error::no eligible candidates found"
+            exit 1
+          fi
+          echo "auto-selected: $NODEID"
+          echo "nodeid=$NODEID" >> "$GITHUB_OUTPUT"
+
+      - name: Extract harness
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          spinwright extract "${{ steps.prep.outputs.ws }}" \
+            --test "${{ steps.choose.outputs.nodeid }}" \
+            --config /tmp/spinwright.toml
+
+      - name: Compute extraction stem
+        id: stem
+        run: |
+          STEM=$(python -c "from spinwright.extraction.extract import sanitize_test_id; print(sanitize_test_id('${{ steps.choose.outputs.nodeid }}'))")
+          echo "stem=$STEM" >> "$GITHUB_OUTPUT"
+
+      - name: Run optimization loop + regression check
+        id: run
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          RUN_ARGS=(
+            "${{ steps.prep.outputs.ws }}"
+            --extraction "${{ steps.stem.outputs.stem }}"
+            --config /tmp/spinwright.toml
+            --runs-dir "$GITHUB_WORKSPACE/spinwright-runs"
+          )
+          if [ -n "${{ inputs.exclude_path }}" ]; then
+            RUN_ARGS+=(--exclude-path "${{ inputs.exclude_path }}")
+          fi
+          set +e
+          spinwright run "${RUN_ARGS[@]}" | tee /tmp/run.out
+          STATUS=$?
+          set -e
+          RUN_DIR=$(grep '^RUN_DIR=' /tmp/run.out | tail -1 | cut -d= -f2-)
+          SURV=$(grep '^SURVIVING_PATCHES=' /tmp/run.out | tail -1 | cut -d= -f2-)
+          echo "run_dir=$RUN_DIR"             >> "$GITHUB_OUTPUT"
+          echo "surviving_patches=$SURV"      >> "$GITHUB_OUTPUT"
+          echo "status=$STATUS"               >> "$GITHUB_OUTPUT"
+          # Don't fail the job here: zero accepted patches is a valid
+          # outcome and we still want the artifacts uploaded.
+          true
+
+      - name: Open PR
+        if: steps.run.outputs.surviving_patches != '' && steps.run.outputs.surviving_patches != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          BRANCH="spinwright/auto-${{ github.run_id }}"
+          # Pull spinwright's commits from the workspace into the checkout
+          # we already have authenticated via actions/checkout.
+          git -C "$GITHUB_WORKSPACE" fetch "${{ steps.prep.outputs.ws }}/repo" "+refs/heads/spinwright/prep:refs/heads/$BRANCH"
+          git -C "$GITHUB_WORKSPACE" push origin "$BRANCH"
+          TITLE=$(head -1 "${{ steps.run.outputs.run_dir }}/PR.md" | sed 's/^#\s*//')
+          gh pr create \
+            --base "${{ github.event.repository.default_branch }}" \
+            --head "$BRANCH" \
+            --title "$TITLE" \
+            --body-file "${{ steps.run.outputs.run_dir }}/PR.md"
+
+      - name: Upload run artifacts
+        if: always() && steps.run.outputs.run_dir != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: spinwright-run-${{ github.run_id }}
+          path: ${{ steps.run.outputs.run_dir }}
+
+      - name: Report status
+        if: always()
+        run: |
+          echo "::notice::surviving patches: ${{ steps.run.outputs.surviving_patches }}"
+          echo "::notice::run dir: ${{ steps.run.outputs.run_dir }}"
