@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from spinwright import config as cfg_mod
+from spinwright.cli._extraction_arg import resolve_extraction
 from spinwright.llm import client as client_mod
 from spinwright.llm.client import ClientProtocol
 from spinwright.optimization import optimize as opt_mod
@@ -23,17 +24,7 @@ def _resolve_workspace(workspace_arg: str) -> workspace_mod.Workspace:
     return workspace_mod.reuse(root)
 
 
-def _resolve_extraction(workspace: workspace_mod.Workspace, extraction_arg: str) -> Path:
-    p = Path(extraction_arg)
-    if not p.is_absolute():
-        for candidate in (Path.cwd() / p, workspace.repo_dir / p):
-            resolved = candidate.resolve()
-            if resolved.exists():
-                return resolved
-    p = p.resolve()
-    if not p.exists():
-        raise SystemExit(f"extraction not found: {extraction_arg!r}")
-    return p
+# Extraction resolution moved to cli._extraction_arg (shared with measure/run).
 
 
 def _report(result: opt_mod.OptimizationResult) -> None:
@@ -72,11 +63,18 @@ def _report(result: opt_mod.OptimizationResult) -> None:
         print(f"  tokens:    in={c.input_tokens} out={c.output_tokens} "
               f"cache_w={c.cache_creation_input_tokens} cache_r={c.cache_read_input_tokens}")
         print(f"  turns:     {len(c.turns)}  stop_reason={c.stop_reason}")
-    if result.diff and not result.accepted:
-        snippet = "\n".join(result.diff.splitlines()[:40])
-        print("  attempted diff (first 40 lines):")
-        for line in snippet.splitlines():
+    if result.diff:
+        label = "applied diff" if result.accepted else "attempted diff (reverted)"
+        lines = result.diff.splitlines()
+        cap = 80
+        print(f"  {label}{' (first %d lines)' % cap if len(lines) > cap else ''}:")
+        for line in lines[:cap]:
             print(f"    {line}")
+        if len(lines) > cap:
+            print(f"    ... ({len(lines) - cap} more lines)")
+        if result.commit_sha:
+            print()
+            print(f"  see the full commit with:  git -C <ws>/repo show {result.commit_sha}")
 
 
 def run(
@@ -86,7 +84,7 @@ def run(
 ) -> int:
     cfg = _load_config(args.config)
     ws = _resolve_workspace(args.workspace)
-    extraction = _resolve_extraction(ws, args.extraction)
+    extraction = resolve_extraction(ws.root, args.extraction, corpus_dir=cfg.corpus.dir)
 
     try:
         client = client_factory()

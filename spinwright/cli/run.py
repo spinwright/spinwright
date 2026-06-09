@@ -9,6 +9,7 @@ from typing import Callable
 from spinwright import config as cfg_mod
 from spinwright import run_log
 from spinwright.cli import extract as cli_extract  # workspace auto-detect / prep
+from spinwright.cli._extraction_arg import resolve_extraction
 from spinwright.llm import client as client_mod
 from spinwright.llm.client import ClientProtocol
 from spinwright.optimization import loop as loop_mod
@@ -24,17 +25,7 @@ def _load_config(path: str | None) -> cfg_mod.Config:
     return cfg_mod.default()
 
 
-def _resolve_extraction(workspace, extraction_arg: str) -> Path:
-    p = Path(extraction_arg)
-    if not p.is_absolute():
-        for candidate in (Path.cwd() / p, workspace.repo_dir / p):
-            resolved = candidate.resolve()
-            if resolved.exists():
-                return resolved
-    p = p.resolve()
-    if not p.exists():
-        raise SystemExit(f"extraction not found: {extraction_arg!r}")
-    return p
+# Extraction resolution moved to cli._extraction_arg (shared with measure/optimize).
 
 
 _NODEID_RE = re.compile(r"Source nodeid:\s*`([^`]+)`")
@@ -135,7 +126,7 @@ def run(
 ) -> int:
     cfg = _load_config(args.config)
     ws = cli_extract._resolve_workspace(args.workspace)
-    extraction = _resolve_extraction(ws, args.extraction)
+    extraction = resolve_extraction(ws.root, args.extraction, corpus_dir=cfg.corpus.dir)
 
     try:
         client = client_factory()
@@ -177,6 +168,7 @@ def run(
 
     pr_draft = None
     publish_result = None
+    run_dir = runs_root / run_id      # Default if no_pr path below doesn't set it.
     if not args.no_pr:
         meta = _read_extraction_metadata(
             extraction, fallback_sha=ws.base_sha, corpus_dir=cfg.corpus.dir,
@@ -222,6 +214,12 @@ def run(
                 "extraction": str(extraction),
             },
         )
+
+    # Final structured line so callers (CI, scripts) can locate the run dir
+    # without scraping the human report. Format: ``RUN_DIR=<absolute path>``.
+    print()
+    print(f"RUN_DIR={run_dir}")
+    print(f"SURVIVING_PATCHES={surviving_patches}")
 
     if surviving_patches == 0:
         return 1

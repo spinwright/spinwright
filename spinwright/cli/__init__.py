@@ -101,7 +101,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_measure = sub.add_parser("measure", help="Measure an extracted harness.")
     p_measure.add_argument("workspace", help="Path to a workspace built by `spinwright prep`.")
-    p_measure.add_argument("--extraction", required=True, help="Path to extraction module.")
+    p_measure.add_argument("--extraction", required=True,
+                           metavar="NAME",
+                           help="Extraction name (stem of the file under <repo>/<corpus_dir>/). NAME, NAME.py, or <corpus_dir>/NAME.py all work.")
     p_measure.add_argument("--config", default=None, help="Path to spinwright.toml.")
     p_measure.add_argument("--repeats", type=int, default=None,
                            help="Override config measurement.walltime_repeats.")
@@ -120,7 +122,8 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_run.add_argument("workspace", help="Path to a workspace built by `spinwright prep`.")
-    p_run.add_argument("--extraction", required=True, help="Path to extraction module.")
+    p_run.add_argument("--extraction", required=True, metavar="NAME",
+                       help="Extraction name; see `spinwright measure --help` for accepted forms.")
     p_run.add_argument("--config", default=None, help="Path to spinwright.toml.")
     p_run.add_argument(
         "--exclude-path", action="append", default=[],
@@ -150,7 +153,8 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_optimize.add_argument("workspace", help="Path to a workspace built by `spinwright prep` or `spinwright extract`.")
-    p_optimize.add_argument("--extraction", required=True, help="Path to extraction module.")
+    p_optimize.add_argument("--extraction", required=True, metavar="NAME",
+                            help="Extraction name; see `spinwright measure --help` for accepted forms.")
     p_optimize.add_argument("--config", default=None, help="Path to spinwright.toml.")
     p_optimize.add_argument(
         "--exclude-path",

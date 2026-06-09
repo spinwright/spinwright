@@ -72,8 +72,11 @@ def _report(result: extract_mod.ExtractionResult, ws: workspace_mod.Workspace) -
             print(f"  tokens:  in={c.input_tokens} out={c.output_tokens} "
                   f"cache_w={c.cache_creation_input_tokens} cache_r={c.cache_read_input_tokens}")
             print(f"  turns:   {len(c.turns)}  stop_reason={c.stop_reason}")
+        # The --extraction arg is a stem (see cli._extraction_arg) so paste this
+        # exactly and you can also drop it into `optimize` / `run`.
+        stem = result.extraction_path.stem if result.extraction_path else ""
         print()
-        print(f"  measure it with: spinwright measure {ws.root} --extraction {repo_rel_ext}")
+        print(f"  measure it with: spinwright measure {ws.root} --extraction {stem}")
         return
 
     print()

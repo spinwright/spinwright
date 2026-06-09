@@ -8,6 +8,7 @@ from pathlib import Path
 
 from spinwright import config as cfg_mod
 from spinwright import platform as platform_mod
+from spinwright.cli._extraction_arg import resolve_extraction, to_stem
 from spinwright.measurement import callgrind as callgrind_mod
 from spinwright.measurement import walltime
 from spinwright.measurement.runner import DriverError
@@ -31,20 +32,7 @@ def _resolve_workspace(workspace_arg: str) -> tuple[Path, Path]:
     return root, venv_python
 
 
-def _resolve_extraction(workspace_root: Path, extraction_arg: str) -> Path:
-    p = Path(extraction_arg)
-    if not p.is_absolute():
-        # Try relative to cwd first, then relative to the workspace's repo dir.
-        cwd_candidate = (Path.cwd() / p).resolve()
-        if cwd_candidate.exists():
-            return cwd_candidate
-        repo_candidate = (workspace_root / "repo" / p).resolve()
-        if repo_candidate.exists():
-            return repo_candidate
-    p = p.resolve()
-    if not p.exists():
-        raise SystemExit(f"extraction not found: {extraction_arg!r}")
-    return p
+# Extraction resolution moved to cli._extraction_arg (shared with optimize/run).
 
 
 def _print_human(wt, vr, *, callgrind=None, callgrind_skip_reason=None) -> None:
@@ -72,7 +60,7 @@ def _print_human(wt, vr, *, callgrind=None, callgrind_skip_reason=None) -> None:
 def run(args: argparse.Namespace) -> int:
     cfg = _load_config(args.config)
     workspace_root, venv_python = _resolve_workspace(args.workspace)
-    extraction = _resolve_extraction(workspace_root, args.extraction)
+    extraction = resolve_extraction(workspace_root, args.extraction, corpus_dir=cfg.corpus.dir)
     repeats = args.repeats if args.repeats is not None else cfg.measurement.walltime_repeats
 
     try:
@@ -115,13 +103,9 @@ def run(args: argparse.Namespace) -> int:
     else:
         _print_human(wt, vr, callgrind=cg, callgrind_skip_reason=cg_skip_reason)
         if vr.passed:
-            # Hint at the next step so the chain stays paste-able.
-            try:
-                rel = str(extraction.resolve().relative_to((workspace_root / "repo").resolve()))
-            except ValueError:
-                rel = str(extraction)
+            stem = to_stem(args.extraction)
             print()
-            print(f"  next: spinwright optimize {workspace_root} --extraction {rel}")
-            print(f"   or:  spinwright run      {workspace_root} --extraction {rel}")
+            print(f"  next: spinwright optimize {workspace_root} --extraction {stem}")
+            print(f"   or:  spinwright run      {workspace_root} --extraction {stem}")
 
     return 0 if vr.passed else 1

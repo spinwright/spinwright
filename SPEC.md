@@ -451,30 +451,51 @@ Flags:
 
 ## 12. GitHub Action
 
-A reusable workflow at `.github/workflows/spinwright.yml` (template provided):
+Spinwright ships **two** workflow files for two use cases:
 
-```yaml
-on:
-  workflow_dispatch:
-    inputs:
-      test:
-        description: "Specific test nodeid (optional)"
-        required: false
-jobs:
-  spinwright:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get install -y valgrind
-      - uses: actions/setup-python@v5
-      - run: pip install spinwright
-      - env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: spinwright run . --test "${{ inputs.test }}" --config spinwright.toml
-```
+| File | Purpose |
+|---|---|
+| `.github/workflows/optimize.yml` (in spinwright's own repo) | The reusable workflow that defines the pipeline. Triggered by `workflow_call` only. |
+| `examples/github-action.yml` (template for target repos) | A ~25-line caller stub that imports the reusable workflow via `uses: <owner>/spinwright/.github/workflows/optimize.yml@<ref>`. Triggered manually by `workflow_dispatch`. |
 
-Required secrets: `ANTHROPIC_API_KEY` for the LLM, `GITHUB_TOKEN` (or a PAT with PR scope) for opening PRs.
+Target repos drop the caller stub at `.github/workflows/spinwright.yml`. The actual pipeline lives in (and is versioned with) spinwright, so target-repo maintainers don't have to copy-paste 200 lines of pipeline logic and don't see pipeline updates as drive-by changes when spinwright evolves. Pinning the `@ref` (to a release tag like `@v0.1.0`) gives target repos control over when they pick up pipeline changes.
+
+A standalone non-reusable variant is intentionally not shipped — anyone who wants to customize the pipeline can fork spinwright and point their caller at the fork.
+
+### 12.1 Required secrets
+
+- `ANTHROPIC_API_KEY` — used by the LLM steps (`extract`, `run`).
+- `GITHUB_TOKEN` — auto-provided by Actions; used by the workflow to push the branch and open the PR.
+
+### 12.2 Workflow inputs
+
+| Input | Required | Purpose |
+|---|---|---|
+| `test` | no | Explicit pytest nodeid; skips auto-selection when set. |
+| `test_path` | no | Repo-relative path to constrain auto-selection (e.g. `src/foo/tests`). |
+| `requirements` | no | Repo-relative path to a test/dev requirements file, passed to `spinwright prep --requirements`. |
+| `extras` | no | Comma-separated optional extras for the editable install. |
+| `exclude_path` | no | Substring filtered out of cProfile during the loop (e.g. `/site-packages/numpy`). |
+
+### 12.3 Pipeline structure
+
+1. **Checkout** the target repo with full history (`fetch-depth: 0`).
+2. **Install Python + valgrind + spinwright**. Valgrind is needed so the gate is Callgrind instructions, not wallclock (which is noisy in CI).
+3. **`spinwright prep`** clones the checkout into `/tmp/sw-ws` with the requested deps. (The checkout itself stays clean — the workflow uses it later as the GitHub-authenticated push origin.)
+4. **Choose nodeid**: explicit input wins; otherwise `spinwright candidates ... --nodeids | head -1`.
+5. **`spinwright extract`** runs the LLM-driven extraction; writes a `setup/run/verify` harness under `<corpus_dir>/<sanitized_id>.py`.
+6. **`spinwright run`** drives the agent loop + regression check; writes `PR.md` and a `run_summary.json` to `spinwright-runs/<run_id>/`. Spinwright runs with `pr.mode = "local"` here — the workflow handles the git push and `gh pr create` from the checkout because that's where the authenticated remote already lives. The CLI prints `RUN_DIR=<path>` and `SURVIVING_PATCHES=<n>` as machine-readable trailers for the workflow to grep.
+7. **Open PR**: if any patches survived, the workflow fetches the spinwright branch from the workspace into the original checkout, pushes it under a unique name (`spinwright/auto-<run_id>`), and calls `gh pr create --body-file <PR.md>`.
+8. **Upload artifacts** (always): the run dir is uploaded as `spinwright-run-<run_id>` so reviewers can pull `PR.md` and `run_summary.json` even if the PR step didn't run.
+
+### 12.4 Installing spinwright in the workflow
+
+The reusable workflow's `spinwright_install_spec` input is the string passed to `pip install`:
+
+- **From PyPI** (default): pass nothing — the default is just `spinwright`.
+- **From a Git URL** (pre-PyPI): caller passes `git+https://github.com/<owner>/spinwright.git@<ref>`.
+
+The caller stub in `examples/github-action.yml` currently sets the git URL explicitly; once spinwright lands on PyPI, that line can be deleted from the caller and the default will resolve `spinwright` from the index.
 
 ## 13. Persistent Artifacts in the Target Repo
 
@@ -534,7 +555,7 @@ Spinwright is expected to handle:
 2. **M2 — Single-shot optimization. ✅ (mostly)** Callgrind (Linux, via two-run subtraction since the `CALLGRIND_*` macros need inline assembly), cProfile profiling, single-iteration optimization loop with profile→propose→measure→accept-or-revert via `spinwright optimize`. The orchestrator currently gates on median wallclock on every platform; switching it to the Callgrind gate on Linux is a small follow-up (already-built `measurement.callgrind` is wired into the `measure` CLI but not yet into the `optimize` decision path). pyinstrument and line_profiler tools deferred until needed — cProfile is the LLM's signal for now.
 3. **M3 — Agent loop + regression check. ✅ (BFS, not DFS)** Full agent loop with `explored` tracking, focus-hinted optimization, linear-revert-with-drop-all fallback on regression, `spinwright run` end-to-end CLI. (Soft-accept is out — see Appendix A, Mod 6.) Depth-first descent into callees within a function is deferred until `line_profiler` lands — the current loop is BFS over top-cumtime functions in the target package, which is the practical equivalent without line-level profiling. Multi-patch bisect refinement (when no single revert restores green) is also deferred; the fallback is conservative drop-all.
 4. **M4 — PR assembly & local CLI. ✅** PR title + body rendering (SPEC §10 template), per-run artifact directory under `./spinwright-runs/<run_id>/` with `PR.md` and `run_summary.json`, local-mode that always writes PR.md, github_action-mode that pushes the branch and calls `gh pr create --body-file` (falls back to local with a clear reason when `gh` is missing or `git push` fails). Wired into `spinwright run` with `--no-pr` and `--runs-dir` flags.
-5. **M5 — GitHub Action.** Workflow template, secrets handling, artifact upload. Persistent `{corpus_dir}/` (default `spinwright/`) and `bottleneck_history.json`.
+5. **M5 — GitHub Action. ✅ (initial)** Reusable workflow at `.github/workflows/optimize.yml` (defines the 13-step pipeline; `workflow_call` trigger). Target repos use a ~25-line caller stub at `examples/github-action.yml` that does `uses: <owner>/spinwright/.github/workflows/optimize.yml@<ref>` — pipeline lives once and is versioned with spinwright, target repos pin via `@ref` for stability. Optional `test`/`test_path`/`requirements`/`extras`/`exclude_path` inputs; `spinwright_install_spec` defaults to PyPI but falls back to a git URL for pre-release. Ubuntu + valgrind + Python 3.11; full pipeline + artifact upload + `gh pr create` on surviving patches. CLI gained machine-readable trailers (`RUN_DIR=`, `SURVIVING_PATCHES=`) so the workflow can grep instead of parsing the human report. Persistent `bottleneck_history.json` is still M6.
 6. **M6 — Hardening.** Failure-mode handling, budget enforcement, structured logging, run-summary reporting.
 
 ## Appendix A. Modifications adopted from M1 planning
