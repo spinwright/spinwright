@@ -18,7 +18,7 @@ def test_default_has_expected_models():
 def test_default_modification_knobs_present():
     cfg = config.default()
     assert cfg.measurement.autoscale_min_instructions == 1_000_000_000
-    assert cfg.budget.max_patches_proposed == 10
+    assert cfg.budget.max_patches_proposed == 1
     assert cfg.eligibility.allow_pure_conftest_imports is False
 
 
