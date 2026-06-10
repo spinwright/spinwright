@@ -20,45 +20,67 @@ from spinwright.repo.workspace import Workspace
 class FakeText:
     text: str
     type: str = "text"
-    def model_dump(self, *, exclude_none=True): return {"type": "text", "text": self.text}
+
+    def model_dump(self, *, exclude_none=True):
+        return {"type": "text", "text": self.text}
 
 
 @dataclass
 class FakeToolUse:
-    id: str; name: str; input: dict
+    id: str
+    name: str
+    input: dict
     type: str = "tool_use"
+
     def model_dump(self, *, exclude_none=True):
-        return {"type": "tool_use", "id": self.id, "name": self.name, "input": self.input}
+        return {
+            "type": "tool_use",
+            "id": self.id,
+            "name": self.name,
+            "input": self.input,
+        }
 
 
 @dataclass
 class FakeUsage:
-    input_tokens: int = 0; output_tokens: int = 0
-    cache_creation_input_tokens: int = 0; cache_read_input_tokens: int = 0
-    def model_dump(self, *, exclude_none=True): return {
-        "input_tokens": self.input_tokens, "output_tokens": self.output_tokens,
-        "cache_creation_input_tokens": self.cache_creation_input_tokens,
-        "cache_read_input_tokens": self.cache_read_input_tokens,
-    }
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
+
+    def model_dump(self, *, exclude_none=True):
+        return {
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "cache_creation_input_tokens": self.cache_creation_input_tokens,
+            "cache_read_input_tokens": self.cache_read_input_tokens,
+        }
 
 
 @dataclass
 class FakeMessage:
-    content: list[Any]; stop_reason: str
+    content: list[Any]
+    stop_reason: str
     usage: FakeUsage = field(default_factory=FakeUsage)
 
 
 class FakeMessages:
-    def __init__(self): self.responses, self.calls = [], []
-    def queue(self, *r): self.responses.extend(r)
+    def __init__(self):
+        self.responses, self.calls = [], []
+
+    def queue(self, *r):
+        self.responses.extend(r)
+
     def create(self, **kw):
         self.calls.append(copy.deepcopy(kw))
-        if not self.responses: raise AssertionError("no fake response queued")
+        if not self.responses:
+            raise AssertionError("no fake response queued")
         return self.responses.pop(0)
 
 
 class FakeClient:
-    def __init__(self): self.messages = FakeMessages()
+    def __init__(self):
+        self.messages = FakeMessages()
 
 
 _TARGET = """
@@ -103,7 +125,9 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
     venv = root / ".venv"
     venv.symlink_to(Path(sys.executable).parent.parent, target_is_directory=True)
     (repo / "target_pkg").mkdir(parents=True)
-    (repo / "target_pkg" / "__init__.py").write_text(textwrap.dedent(_TARGET).lstrip("\n"))
+    (repo / "target_pkg" / "__init__.py").write_text(
+        textwrap.dedent(_TARGET).lstrip("\n")
+    )
     (repo / "tests").mkdir()
     (repo / "tests" / "test_target.py").write_text(textwrap.dedent(_SUITE).lstrip("\n"))
     extractions = repo / "spinwright"
@@ -119,15 +143,22 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
         subprocess.run(cmd, cwd=repo, check=True, capture_output=True)
     base_sha = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", "HEAD"],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     subprocess.run(
         ["git", "-C", str(repo), "checkout", "-b", "spinwright/test"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return Workspace(
-        root=root, repo_dir=repo, venv_dir=venv,
-        branch="spinwright/test", base_sha=base_sha, keep=True,
+        root=root,
+        repo_dir=repo,
+        venv_dir=venv,
+        branch="spinwright/test",
+        base_sha=base_sha,
+        keep=True,
     ), ext_path
 
 
@@ -138,24 +169,34 @@ def test_run_cli_drives_loop_and_regression(tmp_path: Path, capsys):
     client = FakeClient()
     # One accepted iteration that removes the sleep, then the loop hits the cap.
     client.messages.queue(
-        FakeMessage(content=[FakeToolUse(
-            id="tu_1", name="edit_file",
-            input={"path": target_file,
-                   "old_string": "time.sleep(0.003)\n    ",
-                   "new_string": ""},
-        )], stop_reason="tool_use"),
+        FakeMessage(
+            content=[
+                FakeToolUse(
+                    id="tu_1",
+                    name="edit_file",
+                    input={
+                        "path": target_file,
+                        "old_string": "time.sleep(0.003)\n    ",
+                        "new_string": "",
+                    },
+                )
+            ],
+            stop_reason="tool_use",
+        ),
         FakeMessage(content=[FakeText(text="killed sleep")], stop_reason="end_turn"),
     )
 
     cfg_path = tmp_path / "spinwright.toml"
-    cfg_path.write_text(textwrap.dedent("""
+    cfg_path.write_text(
+        textwrap.dedent("""
         [budget]
         max_patches_proposed = 1
         max_extraction_turns = 4
 
         [measurement]
         walltime_repeats = 3
-    """))
+    """)
+    )
     args = argparse.Namespace(
         workspace=str(ws.root),
         extraction=str(ext_path),
@@ -197,7 +238,8 @@ def test_run_cli_drops_regressing_patch(tmp_path: Path, capsys):
     ws, ext_path = _make_workspace(tmp_path)
     # Loosen the extraction's verify so the LLM can break the suite without
     # tripping verify.
-    ext_path.write_text(textwrap.dedent("""
+    ext_path.write_text(
+        textwrap.dedent("""
         from target_pkg import slow
 
         def setup():
@@ -209,21 +251,40 @@ def test_run_cli_drops_regressing_patch(tmp_path: Path, capsys):
         def verify(state):
             # Intentionally lax — just check we got an int.
             assert isinstance(state["_out"], int)
-    """).lstrip("\n"))
-    subprocess.run(["git", "-C", str(ws.repo_dir), "add", "."],
-                   check=True, capture_output=True)
+    """).lstrip("\n")
+    )
     subprocess.run(
-        ["git", "-C", str(ws.repo_dir), "-c", "user.email=x@x", "-c", "user.name=x",
-         "commit", "--amend", "--no-edit"],
-        check=True, capture_output=True,
+        ["git", "-C", str(ws.repo_dir), "add", "."], check=True, capture_output=True
+    )
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ws.repo_dir),
+            "-c",
+            "user.email=x@x",
+            "-c",
+            "user.name=x",
+            "commit",
+            "--amend",
+            "--no-edit",
+        ],
+        check=True,
+        capture_output=True,
     )
     new_base = subprocess.run(
         ["git", "-C", str(ws.repo_dir), "rev-parse", "HEAD"],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     ws_with_new_base = Workspace(
-        root=ws.root, repo_dir=ws.repo_dir, venv_dir=ws.venv_dir,
-        branch=ws.branch, base_sha=new_base, keep=True,
+        root=ws.root,
+        repo_dir=ws.repo_dir,
+        venv_dir=ws.venv_dir,
+        branch=ws.branch,
+        base_sha=new_base,
+        keep=True,
     )
 
     target_file = str((ws.repo_dir / "target_pkg" / "__init__.py").resolve())
@@ -232,24 +293,34 @@ def test_run_cli_drops_regressing_patch(tmp_path: Path, capsys):
     # LLM "optimizes" by returning a constant — verify still passes (lax),
     # but the suite's exact-value check will fail.
     client.messages.queue(
-        FakeMessage(content=[FakeToolUse(
-            id="tu_1", name="edit_file",
-            input={"path": target_file,
-                   "old_string": "    time.sleep(0.003)\n    return sum(i * i for i in range(n))",
-                   "new_string": "    return 0"},
-        )], stop_reason="tool_use"),
+        FakeMessage(
+            content=[
+                FakeToolUse(
+                    id="tu_1",
+                    name="edit_file",
+                    input={
+                        "path": target_file,
+                        "old_string": "    time.sleep(0.003)\n    return sum(i * i for i in range(n))",
+                        "new_string": "    return 0",
+                    },
+                )
+            ],
+            stop_reason="tool_use",
+        ),
         FakeMessage(content=[FakeText(text="constant!")], stop_reason="end_turn"),
     )
 
     cfg_path = tmp_path / "spinwright.toml"
-    cfg_path.write_text(textwrap.dedent("""
+    cfg_path.write_text(
+        textwrap.dedent("""
         [budget]
         max_patches_proposed = 1
         max_extraction_turns = 4
 
         [measurement]
         walltime_repeats = 3
-    """))
+    """)
+    )
     args = argparse.Namespace(
         workspace=str(ws_with_new_base.root),
         extraction=str(ext_path),

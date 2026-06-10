@@ -19,7 +19,9 @@ def _load_config(path: str | None) -> cfg_mod.Config:
 
 
 def _looks_like_workspace(path: Path) -> bool:
-    return (path / ".venv" / "bin" / "python").exists() and (path / "repo" / ".git").exists()
+    return (path / ".venv" / "bin" / "python").exists() and (
+        path / "repo" / ".git"
+    ).exists()
 
 
 def _resolve_workspace(workspace_arg: str) -> workspace_mod.Workspace:
@@ -69,8 +71,10 @@ def _report(result: extract_mod.ExtractionResult, ws: workspace_mod.Workspace) -
         print(f"  commit:                     {result.commit_sha}")
         if result.conversation:
             c = result.conversation
-            print(f"  tokens:  in={c.input_tokens} out={c.output_tokens} "
-                  f"cache_w={c.cache_creation_input_tokens} cache_r={c.cache_read_input_tokens}")
+            print(
+                f"  tokens:  in={c.input_tokens} out={c.output_tokens} "
+                f"cache_w={c.cache_creation_input_tokens} cache_r={c.cache_read_input_tokens}"
+            )
             print(f"  turns:   {len(c.turns)}  stop_reason={c.stop_reason}")
         # The --extraction arg is a stem (see cli._extraction_arg) so paste this
         # exactly and you can also drop it into `optimize` / `run`.
@@ -93,8 +97,10 @@ def _report(result: extract_mod.ExtractionResult, ws: workspace_mod.Workspace) -
             print(f"    {line}")
     if result.conversation:
         c = result.conversation
-        print(f"  conversation: turns={len(c.turns)} stop_reason={c.stop_reason} "
-              f"tokens_in={c.input_tokens} tokens_out={c.output_tokens}")
+        print(
+            f"  conversation: turns={len(c.turns)} stop_reason={c.stop_reason} "
+            f"tokens_in={c.input_tokens} tokens_out={c.output_tokens}"
+        )
 
 
 def run(

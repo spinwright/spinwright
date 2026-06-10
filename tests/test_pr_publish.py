@@ -16,8 +16,12 @@ def _ws(tmp_path: Path) -> Workspace:
     repo = root / "repo"
     repo.mkdir()
     return Workspace(
-        root=root, repo_dir=repo, venv_dir=root / ".venv",
-        branch="spinwright/test", base_sha="abc123", keep=True,
+        root=root,
+        repo_dir=repo,
+        venv_dir=root / ".venv",
+        branch="spinwright/test",
+        base_sha="abc123",
+        keep=True,
     )
 
 
@@ -27,8 +31,11 @@ def _draft() -> PRDraft:
 
 def test_local_mode_is_noop(tmp_path: Path):
     result = publish.publish(
-        ws=_ws(tmp_path), pr_draft=_draft(),
-        pr_config=PRConfig(mode="local", base_branch="main", branch_prefix="spinwright/"),
+        ws=_ws(tmp_path),
+        pr_draft=_draft(),
+        pr_config=PRConfig(
+            mode="local", base_branch="main", branch_prefix="spinwright/"
+        ),
         run_dir=tmp_path / "run",
     )
     assert result.mode == "local"
@@ -39,8 +46,11 @@ def test_local_mode_is_noop(tmp_path: Path):
 def test_github_action_mode_falls_back_when_gh_missing(tmp_path: Path):
     with patch("spinwright.pr.publish.shutil.which", return_value=None):
         result = publish.publish(
-            ws=_ws(tmp_path), pr_draft=_draft(),
-            pr_config=PRConfig(mode="github_action", base_branch="main", branch_prefix="spinwright/"),
+            ws=_ws(tmp_path),
+            pr_draft=_draft(),
+            pr_config=PRConfig(
+                mode="github_action", base_branch="main", branch_prefix="spinwright/"
+            ),
             run_dir=tmp_path / "run",
         )
     assert result.mode == "local"
@@ -60,17 +70,23 @@ def test_github_action_pushes_and_creates_pr(tmp_path: Path):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[0] == "gh":
             return subprocess.CompletedProcess(
-                cmd, 0,
+                cmd,
+                0,
                 stdout="https://github.com/org/repo/pull/42\n",
                 stderr="",
             )
         return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="?")
 
-    with patch("spinwright.pr.publish.shutil.which", return_value="/usr/bin/gh"), \
-         patch("spinwright.pr.publish.subprocess.run", side_effect=fake_run):
+    with (
+        patch("spinwright.pr.publish.shutil.which", return_value="/usr/bin/gh"),
+        patch("spinwright.pr.publish.subprocess.run", side_effect=fake_run),
+    ):
         result = publish.publish(
-            ws=_ws(tmp_path), pr_draft=_draft(),
-            pr_config=PRConfig(mode="github_action", base_branch="main", branch_prefix="spinwright/"),
+            ws=_ws(tmp_path),
+            pr_draft=_draft(),
+            pr_config=PRConfig(
+                mode="github_action", base_branch="main", branch_prefix="spinwright/"
+            ),
             run_dir=run_dir,
         )
     assert result.mode == "github_action"
@@ -84,14 +100,22 @@ def test_github_action_pushes_and_creates_pr(tmp_path: Path):
 def test_github_action_handles_push_failure(tmp_path: Path):
     def fake_run(cmd, **kwargs):
         return subprocess.CompletedProcess(
-            cmd, 1, stdout="", stderr="fatal: remote rejected\n",
+            cmd,
+            1,
+            stdout="",
+            stderr="fatal: remote rejected\n",
         )
 
-    with patch("spinwright.pr.publish.shutil.which", return_value="/usr/bin/gh"), \
-         patch("spinwright.pr.publish.subprocess.run", side_effect=fake_run):
+    with (
+        patch("spinwright.pr.publish.shutil.which", return_value="/usr/bin/gh"),
+        patch("spinwright.pr.publish.subprocess.run", side_effect=fake_run),
+    ):
         result = publish.publish(
-            ws=_ws(tmp_path), pr_draft=_draft(),
-            pr_config=PRConfig(mode="github_action", base_branch="main", branch_prefix="spinwright/"),
+            ws=_ws(tmp_path),
+            pr_draft=_draft(),
+            pr_config=PRConfig(
+                mode="github_action", base_branch="main", branch_prefix="spinwright/"
+            ),
             run_dir=tmp_path / "run",
         )
     assert result.mode == "local"
@@ -108,14 +132,22 @@ def test_github_action_handles_gh_failure(tmp_path: Path):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         if cmd[0] == "gh":
             return subprocess.CompletedProcess(
-                cmd, 1, stdout="", stderr="authentication failed\n",
+                cmd,
+                1,
+                stdout="",
+                stderr="authentication failed\n",
             )
 
-    with patch("spinwright.pr.publish.shutil.which", return_value="/usr/bin/gh"), \
-         patch("spinwright.pr.publish.subprocess.run", side_effect=fake_run):
+    with (
+        patch("spinwright.pr.publish.shutil.which", return_value="/usr/bin/gh"),
+        patch("spinwright.pr.publish.subprocess.run", side_effect=fake_run),
+    ):
         result = publish.publish(
-            ws=_ws(tmp_path), pr_draft=_draft(),
-            pr_config=PRConfig(mode="github_action", base_branch="main", branch_prefix="spinwright/"),
+            ws=_ws(tmp_path),
+            pr_draft=_draft(),
+            pr_config=PRConfig(
+                mode="github_action", base_branch="main", branch_prefix="spinwright/"
+            ),
             run_dir=run_dir,
         )
     assert result.mode == "github_action"

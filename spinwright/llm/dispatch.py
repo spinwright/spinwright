@@ -141,13 +141,19 @@ def run_conversation(
         for block in assistant_content:
             if block.get("type") != "tool_use":
                 continue
-            call_record = {"id": block["id"], "name": block["name"], "input": block.get("input", {})}
+            call_record = {
+                "id": block["id"],
+                "name": block["name"],
+                "input": block.get("input", {}),
+            }
             tool_calls.append(call_record)
             tool_results.append(_dispatch_tool(block, handlers))
 
         if not tool_results:
             # stop_reason said tool_use but we found none — broken response.
-            raise DispatchError("stop_reason=tool_use but no tool_use blocks in content")
+            raise DispatchError(
+                "stop_reason=tool_use but no tool_use blocks in content"
+            )
 
         user_content = tool_results
         messages.append({"role": "user", "content": user_content})
@@ -200,7 +206,9 @@ def _usage_to_dict(usage: Any) -> dict:
 def _accumulate_usage(result: ConversationResult, usage: dict) -> None:
     result.input_tokens += usage.get("input_tokens", 0) or 0
     result.output_tokens += usage.get("output_tokens", 0) or 0
-    result.cache_creation_input_tokens += usage.get("cache_creation_input_tokens", 0) or 0
+    result.cache_creation_input_tokens += (
+        usage.get("cache_creation_input_tokens", 0) or 0
+    )
     result.cache_read_input_tokens += usage.get("cache_read_input_tokens", 0) or 0
 
 

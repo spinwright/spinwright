@@ -87,7 +87,9 @@ def test_autoscale_caps_unbounded_estimates():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(sys.platform.startswith("linux"), reason="checks the macOS-side guard only")
+@pytest.mark.skipif(
+    sys.platform.startswith("linux"), reason="checks the macOS-side guard only"
+)
 def test_measure_callgrind_refuses_on_non_linux(tmp_path: Path):
     ext = tmp_path / "ext.py"
     ext.write_text("def setup(): return {}\ndef run(s): pass\ndef verify(s): pass\n")
@@ -95,12 +97,15 @@ def test_measure_callgrind_refuses_on_non_linux(tmp_path: Path):
         callgrind.measure_callgrind(Path(sys.executable), ext)
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="needs Linux + valgrind")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="needs Linux + valgrind"
+)
 def test_measure_callgrind_refuses_when_valgrind_missing(tmp_path: Path):
     ext = tmp_path / "ext.py"
     ext.write_text("def setup(): return {}\ndef run(s): pass\ndef verify(s): pass\n")
     with pytest.raises(callgrind.CallgrindUnavailable, match="valgrind binary"):
         callgrind.measure_callgrind(
-            Path(sys.executable), ext,
+            Path(sys.executable),
+            ext,
             valgrind_path="/nonexistent/valgrind",
         )

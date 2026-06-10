@@ -41,27 +41,39 @@ def _report(result: opt_mod.OptimizationResult) -> None:
 
     print(f"  gate metric: {result.gate_metric}")
     if bw is not None:
-        print(f"  baseline walltime:  best={bw.best_seconds*1e6:.2f} us  median={bw.median_seconds*1e6:.2f} us  stddev={bw.stddev_seconds*1e6:.2f} us")
+        print(
+            f"  baseline walltime:  best={bw.best_seconds * 1e6:.2f} us  median={bw.median_seconds * 1e6:.2f} us  stddev={bw.stddev_seconds * 1e6:.2f} us"
+        )
     if cw is not None:
-        print(f"  candidate walltime: best={cw.best_seconds*1e6:.2f} us  median={cw.median_seconds*1e6:.2f} us  stddev={cw.stddev_seconds*1e6:.2f} us")
+        print(
+            f"  candidate walltime: best={cw.best_seconds * 1e6:.2f} us  median={cw.median_seconds * 1e6:.2f} us  stddev={cw.stddev_seconds * 1e6:.2f} us"
+        )
     if result.relative_walltime_improvement is not None:
         print(f"  walltime delta:     {result.relative_walltime_improvement:+.2%}")
     if bcg is not None:
-        print(f"  baseline callgrind:  {bcg.instructions:,} inst/call  (N={bcg.autoscale_iterations:,})")
+        print(
+            f"  baseline callgrind:  {bcg.instructions:,} inst/call  (N={bcg.autoscale_iterations:,})"
+        )
     if ccg is not None:
-        print(f"  candidate callgrind: {ccg.instructions:,} inst/call  (N={ccg.autoscale_iterations:,})")
+        print(
+            f"  candidate callgrind: {ccg.instructions:,} inst/call  (N={ccg.autoscale_iterations:,})"
+        )
     if result.relative_callgrind_improvement is not None:
         print(f"  callgrind delta:    {result.relative_callgrind_improvement:+.2%}")
     if result.relative_improvement is not None:
-        print(f"  primary delta:      {result.relative_improvement:+.2%} (threshold {result.threshold:.0%})")
+        print(
+            f"  primary delta:      {result.relative_improvement:+.2%} (threshold {result.threshold:.0%})"
+        )
     if result.commit_sha:
         print(f"  commit:    {result.commit_sha}")
     if result.reverted_paths:
         print(f"  reverted:  {len(result.reverted_paths)} file(s) restored to HEAD")
     if result.conversation:
         c = result.conversation
-        print(f"  tokens:    in={c.input_tokens} out={c.output_tokens} "
-              f"cache_w={c.cache_creation_input_tokens} cache_r={c.cache_read_input_tokens}")
+        print(
+            f"  tokens:    in={c.input_tokens} out={c.output_tokens} "
+            f"cache_w={c.cache_creation_input_tokens} cache_r={c.cache_read_input_tokens}"
+        )
         print(f"  turns:     {len(c.turns)}  stop_reason={c.stop_reason}")
     if result.diff:
         label = "applied diff" if result.accepted else "attempted diff (reverted)"
@@ -74,7 +86,9 @@ def _report(result: opt_mod.OptimizationResult) -> None:
             print(f"    ... ({len(lines) - cap} more lines)")
         if result.commit_sha:
             print()
-            print(f"  see the full commit with:  git -C <ws>/repo show {result.commit_sha}")
+            print(
+                f"  see the full commit with:  git -C <ws>/repo show {result.commit_sha}"
+            )
 
 
 def run(

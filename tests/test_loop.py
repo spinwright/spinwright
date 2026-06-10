@@ -23,44 +23,67 @@ from spinwright.repo.workspace import Workspace
 class FakeText:
     text: str
     type: str = "text"
-    def model_dump(self, *, exclude_none=True): return {"type": "text", "text": self.text}
+
+    def model_dump(self, *, exclude_none=True):
+        return {"type": "text", "text": self.text}
 
 
 @dataclass
 class FakeToolUse:
-    id: str; name: str; input: dict
+    id: str
+    name: str
+    input: dict
     type: str = "tool_use"
-    def model_dump(self, *, exclude_none=True): return {"type": "tool_use", "id": self.id, "name": self.name, "input": self.input}
+
+    def model_dump(self, *, exclude_none=True):
+        return {
+            "type": "tool_use",
+            "id": self.id,
+            "name": self.name,
+            "input": self.input,
+        }
 
 
 @dataclass
 class FakeUsage:
-    input_tokens: int = 0; output_tokens: int = 0
-    cache_creation_input_tokens: int = 0; cache_read_input_tokens: int = 0
-    def model_dump(self, *, exclude_none=True): return {
-        "input_tokens": self.input_tokens, "output_tokens": self.output_tokens,
-        "cache_creation_input_tokens": self.cache_creation_input_tokens,
-        "cache_read_input_tokens": self.cache_read_input_tokens,
-    }
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
+
+    def model_dump(self, *, exclude_none=True):
+        return {
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "cache_creation_input_tokens": self.cache_creation_input_tokens,
+            "cache_read_input_tokens": self.cache_read_input_tokens,
+        }
 
 
 @dataclass
 class FakeMessage:
-    content: list[Any]; stop_reason: str
+    content: list[Any]
+    stop_reason: str
     usage: FakeUsage = field(default_factory=FakeUsage)
 
 
 class FakeMessages:
-    def __init__(self): self.responses, self.calls = [], []
-    def queue(self, *r): self.responses.extend(r)
+    def __init__(self):
+        self.responses, self.calls = [], []
+
+    def queue(self, *r):
+        self.responses.extend(r)
+
     def create(self, **kw):
         self.calls.append(copy.deepcopy(kw))
-        if not self.responses: raise AssertionError("no fake response queued")
+        if not self.responses:
+            raise AssertionError("no fake response queued")
         return self.responses.pop(0)
 
 
 class FakeClient:
-    def __init__(self): self.messages = FakeMessages()
+    def __init__(self):
+        self.messages = FakeMessages()
 
 
 # ---------------------------------------------------------------------------
@@ -68,18 +91,29 @@ class FakeClient:
 # ---------------------------------------------------------------------------
 
 
-def _entry(funcname: str, filename: str, lineno: int = 1, cumtime: float = 0.0) -> ProfileEntry:
+def _entry(
+    funcname: str, filename: str, lineno: int = 1, cumtime: float = 0.0
+) -> ProfileEntry:
     return ProfileEntry(
-        funcname=funcname, filename=filename, lineno=lineno,
-        calls=1, primitive_calls=1, tottime=0.0, cumtime=cumtime,
-        tottime_per_call=0.0, cumtime_per_call=0.0,
+        funcname=funcname,
+        filename=filename,
+        lineno=lineno,
+        calls=1,
+        primitive_calls=1,
+        tottime=0.0,
+        cumtime=cumtime,
+        tottime_per_call=0.0,
+        cumtime_per_call=0.0,
     )
 
 
 def _profile(*entries: ProfileEntry) -> CProfileResult:
     return CProfileResult(
-        iterations=1, total_seconds=0.0,
-        entries=tuple(entries), verify_passed=True, verify_error=None,
+        iterations=1,
+        total_seconds=0.0,
+        entries=tuple(entries),
+        verify_passed=True,
+        verify_error=None,
     )
 
 
@@ -102,7 +136,9 @@ def test_select_focus_skips_explored(tmp_path: Path):
     hot_entry = _entry("hot", str(repo / "b.py"), lineno=10, cumtime=1.0)
     mid_entry = _entry("mid", str(repo / "c.py"), lineno=20, cumtime=0.5)
     prof = _profile(hot_entry, mid_entry)
-    explored_key = loop._explored_key(hot_entry.filename, hot_entry.lineno, hot_entry.funcname)
+    explored_key = loop._explored_key(
+        hot_entry.filename, hot_entry.lineno, hot_entry.funcname
+    )
     focus = loop._select_focus(prof, repo, explored=[explored_key])
     assert focus is not None
     assert focus.funcname == "mid"
@@ -191,7 +227,9 @@ def test_guess_qualname_returns_none_outside_repo(tmp_path: Path):
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     q = loop._guess_qualname(
-        str(elsewhere / "mod.py"), "f", repo,
+        str(elsewhere / "mod.py"),
+        "f",
+        repo,
     )
     assert q is None
 
@@ -239,7 +277,9 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
     (venv / "bin").mkdir(parents=True)
     (venv / "bin" / "python").symlink_to(Path(sys.executable))
     (repo / "target_pkg").mkdir(parents=True)
-    (repo / "target_pkg" / "__init__.py").write_text(textwrap.dedent(_TARGET_PKG).lstrip("\n"))
+    (repo / "target_pkg" / "__init__.py").write_text(
+        textwrap.dedent(_TARGET_PKG).lstrip("\n")
+    )
     extractions = repo / "spinwright"
     extractions.mkdir(parents=True)
     (extractions / "__init__.py").write_text("")
@@ -253,23 +293,35 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
         subprocess.run(cmd, cwd=repo, check=True, capture_output=True)
     base_sha = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", "HEAD"],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     subprocess.run(
         ["git", "-C", str(repo), "checkout", "-b", "spinwright/test"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return Workspace(
-        root=root, repo_dir=repo, venv_dir=venv,
-        branch="spinwright/test", base_sha=base_sha, keep=True,
+        root=root,
+        repo_dir=repo,
+        venv_dir=venv,
+        branch="spinwright/test",
+        base_sha=base_sha,
+        keep=True,
     ), ext_path
 
 
 def _cfg(threshold=0.20, repeats=3, max_iters=3) -> cfg_mod.Config:
-    return cfg_mod.from_dict({
-        "measurement": {"improvement_threshold": threshold, "walltime_repeats": repeats},
-        "budget": {"max_patches_proposed": max_iters, "max_extraction_turns": 4},
-    })
+    return cfg_mod.from_dict(
+        {
+            "measurement": {
+                "improvement_threshold": threshold,
+                "walltime_repeats": repeats,
+            },
+            "budget": {"max_patches_proposed": max_iters, "max_extraction_turns": 4},
+        }
+    )
 
 
 def test_loop_accepts_two_separate_focus_optimizations(tmp_path: Path):
@@ -281,23 +333,43 @@ def test_loop_accepts_two_separate_focus_optimizations(tmp_path: Path):
     client = FakeClient()
     # iter 1: edit slow_a's sleep
     client.messages.queue(
-        FakeMessage(content=[FakeToolUse(
-            id="tu_a", name="edit_file",
-            input={"path": target_file,
-                   "old_string": "def slow_a(n):\n    time.sleep(0.003)\n    ",
-                   "new_string": "def slow_a(n):\n    "},
-        )], stop_reason="tool_use"),
-        FakeMessage(content=[FakeText(text="killed slow_a sleep")], stop_reason="end_turn"),
+        FakeMessage(
+            content=[
+                FakeToolUse(
+                    id="tu_a",
+                    name="edit_file",
+                    input={
+                        "path": target_file,
+                        "old_string": "def slow_a(n):\n    time.sleep(0.003)\n    ",
+                        "new_string": "def slow_a(n):\n    ",
+                    },
+                )
+            ],
+            stop_reason="tool_use",
+        ),
+        FakeMessage(
+            content=[FakeText(text="killed slow_a sleep")], stop_reason="end_turn"
+        ),
     )
     # iter 2: edit slow_b's sleep
     client.messages.queue(
-        FakeMessage(content=[FakeToolUse(
-            id="tu_b", name="edit_file",
-            input={"path": target_file,
-                   "old_string": "def slow_b(n):\n    time.sleep(0.003)\n    ",
-                   "new_string": "def slow_b(n):\n    "},
-        )], stop_reason="tool_use"),
-        FakeMessage(content=[FakeText(text="killed slow_b sleep")], stop_reason="end_turn"),
+        FakeMessage(
+            content=[
+                FakeToolUse(
+                    id="tu_b",
+                    name="edit_file",
+                    input={
+                        "path": target_file,
+                        "old_string": "def slow_b(n):\n    time.sleep(0.003)\n    ",
+                        "new_string": "def slow_b(n):\n    ",
+                    },
+                )
+            ],
+            stop_reason="tool_use",
+        ),
+        FakeMessage(
+            content=[FakeText(text="killed slow_b sleep")], stop_reason="end_turn"
+        ),
     )
     # iter 3: no more improvements; LLM ends without editing
     client.messages.queue(
@@ -310,10 +382,16 @@ def test_loop_accepts_two_separate_focus_optimizations(tmp_path: Path):
     assert result.accepted_count == 2
     assert result.stop_reason in {"max_iterations", "no_remaining_bottlenecks"}
     # Both edits made it to commits
-    log = subprocess.run(
-        ["git", "-C", str(ws.repo_dir), "log", "--oneline"],
-        capture_output=True, text=True, check=True,
-    ).stdout.strip().splitlines()
+    log = (
+        subprocess.run(
+            ["git", "-C", str(ws.repo_dir), "log", "--oneline"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        .stdout.strip()
+        .splitlines()
+    )
     # init + 2 spinwright commits
     assert len(log) >= 3
     spinwright_commits = [l for l in log if "spinwright: optimize" in l]
@@ -330,7 +408,9 @@ def test_loop_records_explored_for_rejections(tmp_path: Path):
     # All three iterations: LLM ends immediately with no edits.
     for i in range(3):
         client.messages.queue(
-            FakeMessage(content=[FakeText(text=f"no improvement {i}")], stop_reason="end_turn"),
+            FakeMessage(
+                content=[FakeText(text=f"no improvement {i}")], stop_reason="end_turn"
+            ),
         )
 
     result = loop.run_loop(ws=ws, extraction_path=ext_path, config=cfg, client=client)

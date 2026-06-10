@@ -9,10 +9,10 @@ from spinwright.repo.workspace import Workspace
 
 @dataclass
 class RegressionResult:
-    passed: bool                            # Final suite state after any reverts.
+    passed: bool  # Final suite state after any reverts.
     dropped_commits: list[str] = field(default_factory=list)
     final_pytest_output: str = ""
-    fallback_used: str = "none"             # "none" | "linear_revert" | "drop_all"
+    fallback_used: str = "none"  # "none" | "linear_revert" | "drop_all"
 
 
 def run_regression_check(
@@ -45,9 +45,11 @@ def run_regression_check(
     while remaining:
         culprit_index = -1
         for i in range(len(remaining)):
-            trial = remaining[:i] + remaining[i + 1:]
+            trial = remaining[:i] + remaining[i + 1 :]
             _apply_subset(ws, trial)
-            ok, output = _run_pytest(venv_python, ws.repo_dir, pytest_args, timeout_seconds)
+            ok, output = _run_pytest(
+                venv_python, ws.repo_dir, pytest_args, timeout_seconds
+            )
             if ok:
                 culprit_index = i
                 break
@@ -58,12 +60,14 @@ def run_regression_check(
             dropped.extend(remaining)
             remaining = []
             used_fallback = "drop_all"
-            passed, output = _run_pytest(venv_python, ws.repo_dir, pytest_args, timeout_seconds)
+            passed, output = _run_pytest(
+                venv_python, ws.repo_dir, pytest_args, timeout_seconds
+            )
             break
         # Successfully restored green by dropping one. Workspace is already
         # in the trial state.
         dropped.append(remaining[culprit_index])
-        remaining = remaining[:culprit_index] + remaining[culprit_index + 1:]
+        remaining = remaining[:culprit_index] + remaining[culprit_index + 1 :]
         used_fallback = "linear_revert"
         passed = True
         break
@@ -82,23 +86,44 @@ def run_regression_check(
 
 
 def _run_pytest(
-    venv_python: Path, repo_dir: Path, pytest_args: tuple[str, ...], timeout: float,
+    venv_python: Path,
+    repo_dir: Path,
+    pytest_args: tuple[str, ...],
+    timeout: float,
 ) -> tuple[bool, str]:
     """Run pytest in ``repo_dir`` via the target venv. Returns (passed, output)."""
-    cmd = [str(venv_python), "-m", "pytest", "-p", "no:randomly", "--tb=short", "-q", *pytest_args]
+    cmd = [
+        str(venv_python),
+        "-m",
+        "pytest",
+        "-p",
+        "no:randomly",
+        "--tb=short",
+        "-q",
+        *pytest_args,
+    ]
     try:
         proc = subprocess.run(
-            cmd, cwd=str(repo_dir), capture_output=True, text=True, timeout=timeout,
+            cmd,
+            cwd=str(repo_dir),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired as e:
-        return False, f"pytest timed out after {timeout}s\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}"
+        return (
+            False,
+            f"pytest timed out after {timeout}s\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}",
+        )
     return proc.returncode == 0, proc.stdout + proc.stderr
 
 
 def _git(repo_dir: Path, *args: str, check: bool = True) -> str:
     proc = subprocess.run(
         ["git", "-C", str(repo_dir), *args],
-        capture_output=True, text=True, check=check,
+        capture_output=True,
+        text=True,
+        check=check,
     )
     return proc.stdout
 
@@ -112,11 +137,19 @@ def _apply_subset(ws: Workspace, commits_to_keep: list[str]) -> None:
     _git(ws.repo_dir, "reset", "--hard", ws.base_sha)
     for sha in commits_to_keep:
         proc = subprocess.run(
-            ["git", "-C", str(ws.repo_dir),
-             "-c", "user.email=spinwright@localhost",
-             "-c", "user.name=spinwright",
-             "cherry-pick", sha],
-            capture_output=True, text=True,
+            [
+                "git",
+                "-C",
+                str(ws.repo_dir),
+                "-c",
+                "user.email=spinwright@localhost",
+                "-c",
+                "user.name=spinwright",
+                "cherry-pick",
+                sha,
+            ],
+            capture_output=True,
+            text=True,
         )
         if proc.returncode != 0:
             # Conflict — abort and skip this commit (treat as already dropped).

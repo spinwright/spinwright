@@ -22,6 +22,7 @@ from spinwright.repo.workspace import Workspace
 class FakeText:
     text: str
     type: str = "text"
+
     def model_dump(self, *, exclude_none: bool = True) -> dict:
         return {"type": "text", "text": self.text}
 
@@ -32,8 +33,14 @@ class FakeToolUse:
     name: str
     input: dict
     type: str = "tool_use"
+
     def model_dump(self, *, exclude_none: bool = True) -> dict:
-        return {"type": "tool_use", "id": self.id, "name": self.name, "input": self.input}
+        return {
+            "type": "tool_use",
+            "id": self.id,
+            "name": self.name,
+            "input": self.input,
+        }
 
 
 @dataclass
@@ -42,6 +49,7 @@ class FakeUsage:
     output_tokens: int = 0
     cache_creation_input_tokens: int = 0
     cache_read_input_tokens: int = 0
+
     def model_dump(self, *, exclude_none: bool = True) -> dict:
         return {
             "input_tokens": self.input_tokens,
@@ -99,7 +107,9 @@ def _make_workspace(tmp_path: Path) -> Workspace:
     (venv / "bin").mkdir(parents=True)
     (venv / "bin" / "python").symlink_to(Path(sys.executable))
     (repo / "tests").mkdir(parents=True)
-    (repo / "tests" / "test_mod.py").write_text(textwrap.dedent(_DEFAULT_TEST).lstrip("\n"))
+    (repo / "tests" / "test_mod.py").write_text(
+        textwrap.dedent(_DEFAULT_TEST).lstrip("\n")
+    )
     (repo / "target_pkg").mkdir()
     (repo / "target_pkg" / "__init__.py").write_text(
         "def sum_of_squares(xs):\n    return sum(x * x for x in xs)\n"
@@ -112,7 +122,8 @@ def _make_workspace(tmp_path: Path) -> Workspace:
         subprocess.run(cmd, cwd=repo, check=True, capture_output=True)
     subprocess.run(
         ["git", "-C", str(repo), "checkout", "-b", "spinwright/test"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return Workspace(
         root=root,
@@ -121,7 +132,9 @@ def _make_workspace(tmp_path: Path) -> Workspace:
         branch="spinwright/test",
         base_sha=subprocess.run(
             ["git", "-C", str(repo), "rev-parse", "HEAD"],
-            check=True, capture_output=True, text=True,
+            check=True,
+            capture_output=True,
+            text=True,
         ).stdout.strip(),
         keep=True,
     )
@@ -151,15 +164,21 @@ def test_extract_cli_reuses_existing_workspace_and_succeeds(tmp_path: Path, caps
     # Default config uses corpus.dir = "spinwright"; the CLI test
     # exercises that default path (test_extract.py's narrower tests override it).
     target = str(
-        (ws.repo_dir / "spinwright"
-         / "tests_test_mod__test_sum_of_squares.py").resolve()
+        (
+            ws.repo_dir / "spinwright" / "tests_test_mod__test_sum_of_squares.py"
+        ).resolve()
     )
 
     client = FakeClient()
     client.messages.queue(
         FakeMessage(
-            content=[FakeToolUse(id="tu_1", name="write_file",
-                                 input={"path": target, "content": _GOOD_EXTRACTION.lstrip("\n")})],
+            content=[
+                FakeToolUse(
+                    id="tu_1",
+                    name="write_file",
+                    input={"path": target, "content": _GOOD_EXTRACTION.lstrip("\n")},
+                )
+            ],
             stop_reason="tool_use",
         ),
         FakeMessage(content=[FakeText(text="done")], stop_reason="end_turn"),
@@ -177,24 +196,34 @@ def test_extract_cli_reuses_existing_workspace_and_succeeds(tmp_path: Path, caps
     assert "Extraction succeeded" in captured.out
     assert "tests_test_mod__test_sum_of_squares.py" in captured.out
     # Real commit on the working branch
-    log = subprocess.run(
-        ["git", "-C", str(ws.repo_dir), "log", "--oneline"],
-        capture_output=True, text=True, check=True,
-    ).stdout.strip().splitlines()
+    log = (
+        subprocess.run(
+            ["git", "-C", str(ws.repo_dir), "log", "--oneline"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        .stdout.strip()
+        .splitlines()
+    )
     assert len(log) == 2
     assert "spinwright: extract" in log[0]
 
 
-def test_extract_cli_reports_ineligible_test_without_calling_llm(tmp_path: Path, capsys):
+def test_extract_cli_reports_ineligible_test_without_calling_llm(
+    tmp_path: Path, capsys
+):
     ws = _make_workspace(tmp_path)
     # Overwrite the test with a parametrized one (ineligible).
-    (ws.repo_dir / "tests" / "test_mod.py").write_text(textwrap.dedent("""
+    (ws.repo_dir / "tests" / "test_mod.py").write_text(
+        textwrap.dedent("""
         import pytest
 
         @pytest.mark.parametrize('n', [1, 2])
         def test_param(n):
             assert n > 0
-    """).lstrip("\n"))
+    """).lstrip("\n")
+    )
     client = FakeClient()  # no responses — extract should never call create()
 
     args = argparse.Namespace(

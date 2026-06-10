@@ -19,7 +19,10 @@ from pathlib import Path
 
 
 def resolve_extraction(
-    workspace_root: Path, extraction_arg: str, *, corpus_dir: str,
+    workspace_root: Path,
+    extraction_arg: str,
+    *,
+    corpus_dir: str,
 ) -> Path:
     """Resolve an --extraction arg to an absolute path inside the corpus dir.
     Raises ``SystemExit`` with a helpful message if the file isn't there."""

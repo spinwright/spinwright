@@ -44,11 +44,15 @@ def main() -> int:
         verify_passed = False
         verify_error = traceback.format_exc()
 
-    sys.stdout.write(json.dumps({
-        "iterations": iterations,
-        "verify_passed": verify_passed,
-        "verify_error": verify_error,
-    }))
+    sys.stdout.write(
+        json.dumps(
+            {
+                "iterations": iterations,
+                "verify_passed": verify_passed,
+                "verify_error": verify_error,
+            }
+        )
+    )
     return 0
 
 

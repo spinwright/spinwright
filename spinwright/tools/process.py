@@ -37,8 +37,12 @@ def run_python(
     except subprocess.TimeoutExpired as e:
         return RunResult(
             returncode=-1,
-            stdout=e.stdout.decode() if isinstance(e.stdout, bytes) else (e.stdout or ""),
-            stderr=e.stderr.decode() if isinstance(e.stderr, bytes) else (e.stderr or ""),
+            stdout=e.stdout.decode()
+            if isinstance(e.stdout, bytes)
+            else (e.stdout or ""),
+            stderr=e.stderr.decode()
+            if isinstance(e.stderr, bytes)
+            else (e.stderr or ""),
             timed_out=True,
         )
     return RunResult(

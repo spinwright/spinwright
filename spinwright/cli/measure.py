@@ -60,12 +60,19 @@ def _print_human(wt, vr, *, callgrind=None, callgrind_skip_reason=None) -> None:
 def run(args: argparse.Namespace) -> int:
     cfg = _load_config(args.config)
     workspace_root, venv_python = _resolve_workspace(args.workspace)
-    extraction = resolve_extraction(workspace_root, args.extraction, corpus_dir=cfg.corpus.dir)
-    repeats = args.repeats if args.repeats is not None else cfg.measurement.walltime_repeats
+    extraction = resolve_extraction(
+        workspace_root, args.extraction, corpus_dir=cfg.corpus.dir
+    )
+    repeats = (
+        args.repeats if args.repeats is not None else cfg.measurement.walltime_repeats
+    )
 
     try:
         wt, vr = walltime.measure(
-            venv_python, extraction, repeats=repeats, cwd=workspace_root / "repo",
+            venv_python,
+            extraction,
+            repeats=repeats,
+            cwd=workspace_root / "repo",
         )
     except DriverError as e:
         print(f"measurement driver failed (rc={e.returncode}):", file=sys.stderr)
@@ -79,7 +86,8 @@ def run(args: argparse.Namespace) -> int:
     else:
         try:
             cg, cg_vr = callgrind_mod.measure_callgrind(
-                venv_python, extraction,
+                venv_python,
+                extraction,
                 valgrind_path=cfg.measurement.callgrind_path,
                 autoscale_min_instructions=cfg.measurement.autoscale_min_instructions,
                 cwd=workspace_root / "repo",

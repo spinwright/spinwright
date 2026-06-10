@@ -23,6 +23,7 @@ from spinwright.repo.workspace import Workspace
 class FakeText:
     text: str
     type: str = "text"
+
     def model_dump(self, *, exclude_none: bool = True) -> dict:
         return {"type": "text", "text": self.text}
 
@@ -33,8 +34,14 @@ class FakeToolUse:
     name: str
     input: dict
     type: str = "tool_use"
+
     def model_dump(self, *, exclude_none: bool = True) -> dict:
-        return {"type": "tool_use", "id": self.id, "name": self.name, "input": self.input}
+        return {
+            "type": "tool_use",
+            "id": self.id,
+            "name": self.name,
+            "input": self.input,
+        }
 
 
 @dataclass
@@ -43,6 +50,7 @@ class FakeUsage:
     output_tokens: int = 0
     cache_creation_input_tokens: int = 0
     cache_read_input_tokens: int = 0
+
     def model_dump(self, *, exclude_none: bool = True) -> dict:
         return {
             "input_tokens": self.input_tokens,
@@ -94,8 +102,8 @@ def sum_squares(n):
 
 
 _FAST_TARGET_REPLACEMENT = (
-    'time.sleep(0.005)  # intentionally slow for the optimizer to fix\n    ',
-    '',  # remove the sleep entirely
+    "time.sleep(0.005)  # intentionally slow for the optimizer to fix\n    ",
+    "",  # remove the sleep entirely
 )
 
 
@@ -121,7 +129,9 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
     (venv / "bin" / "python").symlink_to(Path(sys.executable))
 
     (repo / "target_pkg").mkdir(parents=True)
-    (repo / "target_pkg" / "__init__.py").write_text(textwrap.dedent(_SLOW_TARGET).lstrip("\n"))
+    (repo / "target_pkg" / "__init__.py").write_text(
+        textwrap.dedent(_SLOW_TARGET).lstrip("\n")
+    )
     extractions = repo / "spinwright"
     extractions.mkdir(parents=True)
     (extractions / "__init__.py").write_text("")
@@ -136,11 +146,14 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
         subprocess.run(cmd, cwd=repo, check=True, capture_output=True)
     base_sha = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", "HEAD"],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     subprocess.run(
         ["git", "-C", str(repo), "checkout", "-b", "spinwright/test"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return Workspace(
         root=root,
@@ -153,10 +166,15 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
 
 
 def _cfg(threshold: float = 0.20, repeats: int = 3) -> cfg_mod.Config:
-    return cfg_mod.from_dict({
-        "measurement": {"improvement_threshold": threshold, "walltime_repeats": repeats},
-        "budget": {"max_extraction_turns": 6},
-    })
+    return cfg_mod.from_dict(
+        {
+            "measurement": {
+                "improvement_threshold": threshold,
+                "walltime_repeats": repeats,
+            },
+            "budget": {"max_extraction_turns": 6},
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -166,13 +184,17 @@ def _cfg(threshold: float = 0.20, repeats: int = 3) -> cfg_mod.Config:
 
 def _wt(median: float) -> WalltimeResult:
     return WalltimeResult(
-        best_seconds=median, median_seconds=median, stddev_seconds=0.0,
-        iterations_per_repeat=1, repeats=1,
+        best_seconds=median,
+        median_seconds=median,
+        stddev_seconds=0.0,
+        iterations_per_repeat=1,
+        repeats=1,
     )
 
 
 def test_relative_improvement_basic():
     import pytest as _pt
+
     assert optimize._relative_improvement(_wt(1.0), _wt(0.8)) == _pt.approx(0.2)
     assert optimize._relative_improvement(_wt(1.0), _wt(2.0)) == _pt.approx(-1.0)
     assert optimize._relative_improvement(_wt(0.0), _wt(0.5)) is None
@@ -204,22 +226,29 @@ def test_accepted_when_improvement_exceeds_threshold(tmp_path: Path):
     client = FakeClient()
     client.messages.queue(
         FakeMessage(
-            content=[FakeToolUse(
-                id="tu_1",
-                name="edit_file",
-                input={
-                    "path": target_file,
-                    "old_string": _FAST_TARGET_REPLACEMENT[0],
-                    "new_string": _FAST_TARGET_REPLACEMENT[1],
-                },
-            )],
+            content=[
+                FakeToolUse(
+                    id="tu_1",
+                    name="edit_file",
+                    input={
+                        "path": target_file,
+                        "old_string": _FAST_TARGET_REPLACEMENT[0],
+                        "new_string": _FAST_TARGET_REPLACEMENT[1],
+                    },
+                )
+            ],
             stop_reason="tool_use",
         ),
-        FakeMessage(content=[FakeText(text="removed the sleep")], stop_reason="end_turn"),
+        FakeMessage(
+            content=[FakeText(text="removed the sleep")], stop_reason="end_turn"
+        ),
     )
 
     result = optimize.optimize_once(
-        ws=ws, extraction_path=ext_path, config=cfg, client=client,
+        ws=ws,
+        extraction_path=ext_path,
+        config=cfg,
+        client=client,
     )
     assert result.accepted, result.rejection_reason
     assert result.commit_sha is not None
@@ -227,10 +256,16 @@ def test_accepted_when_improvement_exceeds_threshold(tmp_path: Path):
     assert result.relative_improvement > 0.20
     assert "time.sleep" in result.diff
     # The commit lands on the working branch
-    log = subprocess.run(
-        ["git", "-C", str(ws.repo_dir), "log", "--oneline"],
-        capture_output=True, text=True, check=True,
-    ).stdout.strip().splitlines()
+    log = (
+        subprocess.run(
+            ["git", "-C", str(ws.repo_dir), "log", "--oneline"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        .stdout.strip()
+        .splitlines()
+    )
     assert len(log) == 2
     assert "spinwright: optimize" in log[0]
 
@@ -248,7 +283,10 @@ def test_no_edits_rejects_without_revert(tmp_path: Path):
         FakeMessage(content=[FakeText(text="nothing to do")], stop_reason="end_turn"),
     )
     result = optimize.optimize_once(
-        ws=ws, extraction_path=ext_path, config=cfg, client=client,
+        ws=ws,
+        extraction_path=ext_path,
+        config=cfg,
+        client=client,
     )
     assert not result.accepted
     assert "without applying any edits" in (result.rejection_reason or "")
@@ -262,8 +300,8 @@ def test_no_edits_rejects_without_revert(tmp_path: Path):
 
 
 _BROKEN_REPLACEMENT = (
-    'return sum(i * i for i in range(n))',
-    'return 0  # broken on purpose',
+    "return sum(i * i for i in range(n))",
+    "return 0  # broken on purpose",
 )
 
 
@@ -275,11 +313,17 @@ def test_broken_verify_rejects_and_reverts(tmp_path: Path):
     client = FakeClient()
     client.messages.queue(
         FakeMessage(
-            content=[FakeToolUse(id="tu_1", name="edit_file", input={
-                "path": target_file,
-                "old_string": _BROKEN_REPLACEMENT[0],
-                "new_string": _BROKEN_REPLACEMENT[1],
-            })],
+            content=[
+                FakeToolUse(
+                    id="tu_1",
+                    name="edit_file",
+                    input={
+                        "path": target_file,
+                        "old_string": _BROKEN_REPLACEMENT[0],
+                        "new_string": _BROKEN_REPLACEMENT[1],
+                    },
+                )
+            ],
             stop_reason="tool_use",
         ),
         FakeMessage(content=[FakeText(text="done")], stop_reason="end_turn"),
@@ -287,7 +331,10 @@ def test_broken_verify_rejects_and_reverts(tmp_path: Path):
 
     original = (ws.repo_dir / "target_pkg" / "__init__.py").read_text()
     result = optimize.optimize_once(
-        ws=ws, extraction_path=ext_path, config=cfg, client=client,
+        ws=ws,
+        extraction_path=ext_path,
+        config=cfg,
+        client=client,
     )
     assert not result.accepted
     assert result.candidate_verify is not None
@@ -304,9 +351,9 @@ def test_broken_verify_rejects_and_reverts(tmp_path: Path):
 
 
 _SLOWER_REPLACEMENT = (
-    'return sum(i * i for i in range(n))',
+    "return sum(i * i for i in range(n))",
     # Add an extra small sleep so candidate is even slower than baseline.
-    'time.sleep(0.003)\n    return sum(i * i for i in range(n))',
+    "time.sleep(0.003)\n    return sum(i * i for i in range(n))",
 )
 
 
@@ -318,23 +365,36 @@ def test_slowing_edit_rejected_and_reverted(tmp_path: Path):
     client = FakeClient()
     client.messages.queue(
         FakeMessage(
-            content=[FakeToolUse(id="tu_1", name="edit_file", input={
-                "path": target_file,
-                "old_string": _SLOWER_REPLACEMENT[0],
-                "new_string": _SLOWER_REPLACEMENT[1],
-            })],
+            content=[
+                FakeToolUse(
+                    id="tu_1",
+                    name="edit_file",
+                    input={
+                        "path": target_file,
+                        "old_string": _SLOWER_REPLACEMENT[0],
+                        "new_string": _SLOWER_REPLACEMENT[1],
+                    },
+                )
+            ],
             stop_reason="tool_use",
         ),
-        FakeMessage(content=[FakeText(text="made it slower oops")], stop_reason="end_turn"),
+        FakeMessage(
+            content=[FakeText(text="made it slower oops")], stop_reason="end_turn"
+        ),
     )
 
     original = (ws.repo_dir / "target_pkg" / "__init__.py").read_text()
     result = optimize.optimize_once(
-        ws=ws, extraction_path=ext_path, config=cfg, client=client,
+        ws=ws,
+        extraction_path=ext_path,
+        config=cfg,
+        client=client,
     )
     assert not result.accepted
     assert result.candidate_verify is not None
-    assert result.candidate_verify.passed is True   # verify still passes — it's just slower
+    assert (
+        result.candidate_verify.passed is True
+    )  # verify still passes — it's just slower
     assert result.relative_improvement is not None
     assert result.relative_improvement < 0.20
     assert "threshold" in (result.rejection_reason or "")

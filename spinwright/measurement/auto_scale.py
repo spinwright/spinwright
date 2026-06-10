@@ -21,6 +21,8 @@ def autoscale_iterations(
     """
     if per_call_seconds <= 0:
         return 1
-    estimated_per_call = max(int(per_call_seconds * instructions_per_second_estimate), 1)
+    estimated_per_call = max(
+        int(per_call_seconds * instructions_per_second_estimate), 1
+    )
     n = (min_total_instructions + estimated_per_call - 1) // estimated_per_call
     return max(1, min(n, cap))

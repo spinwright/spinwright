@@ -99,7 +99,9 @@ def from_dict(data: dict[str, Any]) -> Config:
     for key, cls in _SECTIONS.items():
         raw = data.get(key, {})
         if not isinstance(raw, dict):
-            raise ValueError(f"config section [{key}] must be a table, got {type(raw).__name__}")
+            raise ValueError(
+                f"config section [{key}] must be a table, got {type(raw).__name__}"
+            )
         unknown = set(raw) - {f.name for f in cls.__dataclass_fields__.values()}
         if unknown:
             raise ValueError(f"unknown keys in [{key}]: {sorted(unknown)}")

@@ -11,7 +11,9 @@ from spinwright.tools import drivers
 _READ_SOURCE_DRIVER = Path(drivers.__file__).parent / "read_source_driver.py"
 
 
-def list_tests(venv_python: Path, repo_dir: Path, *, pattern: str | None = None) -> list[str]:
+def list_tests(
+    venv_python: Path, repo_dir: Path, *, pattern: str | None = None
+) -> list[str]:
     """Enumerate pytest nodeids in ``repo_dir`` via ``pytest --collect-only -q``.
 
     Cheap: no test bodies are executed. If ``pattern`` is given, it's passed
@@ -20,9 +22,7 @@ def list_tests(venv_python: Path, repo_dir: Path, *, pattern: str | None = None)
     cmd = [str(venv_python), "-m", "pytest", "--collect-only", "-q"]
     if pattern:
         cmd.extend(["-k", pattern])
-    proc = subprocess.run(
-        cmd, cwd=str(repo_dir), capture_output=True, text=True
-    )
+    proc = subprocess.run(cmd, cwd=str(repo_dir), capture_output=True, text=True)
     nodeids: list[str] = []
     for line in proc.stdout.splitlines():
         line = line.strip()
@@ -54,8 +54,7 @@ def get_test_source(repo_dir: Path, nodeid: str) -> dict:
 
     func_source = ast.get_source_segment(source_text, func) or ""
     decorators = [
-        f"@{ast.get_source_segment(source_text, d) or ''}"
-        for d in func.decorator_list
+        f"@{ast.get_source_segment(source_text, d) or ''}" for d in func.decorator_list
     ]
     return {
         "path": str(abs_path),
@@ -74,7 +73,8 @@ def read_source(venv_python: Path, qualname: str) -> dict:
     in the target venv (so the importable namespace matches the test runs)."""
     proc = subprocess.run(
         [str(venv_python), str(_READ_SOURCE_DRIVER), qualname],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     try:
         payload = json.loads(proc.stdout) if proc.stdout else {}

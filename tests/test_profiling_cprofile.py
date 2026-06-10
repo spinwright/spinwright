@@ -87,11 +87,14 @@ def test_exclude_paths_drops_matching_entries(tmp_path: Path):
 
 
 def test_verify_failure_is_reported(tmp_path: Path):
-    ext = _write_extraction(tmp_path, """
+    ext = _write_extraction(
+        tmp_path,
+        """
         def setup(): return {}
         def run(state): pass
         def verify(state): raise AssertionError('nope')
-    """)
+    """,
+    )
     result = cprofile.profile_cprofile(PY, ext, iterations=10)
     assert result.verify_passed is False
     assert "AssertionError" in (result.verify_error or "")
@@ -100,8 +103,11 @@ def test_verify_failure_is_reported(tmp_path: Path):
 
 
 def test_driver_error_propagates(tmp_path: Path):
-    ext = _write_extraction(tmp_path, "def setup(): raise RuntimeError('boom')\n"
-                                       "def run(s): pass\n"
-                                       "def verify(s): pass\n")
+    ext = _write_extraction(
+        tmp_path,
+        "def setup(): raise RuntimeError('boom')\n"
+        "def run(s): pass\n"
+        "def verify(s): pass\n",
+    )
     with pytest.raises(DriverError):
         cprofile.profile_cprofile(PY, ext, iterations=10)

@@ -8,7 +8,9 @@ from pathlib import Path
 class DriverError(RuntimeError):
     """Raised when a measurement driver subprocess fails to produce parseable JSON."""
 
-    def __init__(self, message: str, *, returncode: int, stdout: str, stderr: str) -> None:
+    def __init__(
+        self, message: str, *, returncode: int, stdout: str, stderr: str
+    ) -> None:
         super().__init__(message)
         self.returncode = returncode
         self.stdout = stdout

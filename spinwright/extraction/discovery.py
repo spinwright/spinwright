@@ -71,9 +71,11 @@ def discover(
     when you need to surface those.
     """
     return discover_verbose(
-        venv_python, repo_dir,
+        venv_python,
+        repo_dir,
         slow_threshold_seconds=slow_threshold_seconds,
-        pytest_paths=pytest_paths, extra_args=extra_args,
+        pytest_paths=pytest_paths,
+        extra_args=extra_args,
         timeout_seconds=timeout_seconds,
     ).durations
 
@@ -91,9 +93,11 @@ def discover_verbose(
     stderr tails so the caller can surface collection failures."""
     cmd = [
         str(venv_python),
-        "-m", "pytest",
+        "-m",
+        "pytest",
         "--durations=0",
-        "-p", "no:randomly",
+        "-p",
+        "no:randomly",
         "--tb=no",
         "-q",
         *extra_args,
@@ -107,7 +111,11 @@ def discover_verbose(
         timeout=timeout_seconds,
     )
     durations = _parse_durations(proc.stdout)
-    calls = [d for d in durations if d.phase == "call" and d.seconds >= slow_threshold_seconds]
+    calls = [
+        d
+        for d in durations
+        if d.phase == "call" and d.seconds >= slow_threshold_seconds
+    ]
     calls.sort(key=lambda d: d.seconds, reverse=True)
     return DiscoveryReport(
         durations=calls,

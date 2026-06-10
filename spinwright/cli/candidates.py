@@ -17,9 +17,14 @@ def _load_config(path: str | None) -> cfg_mod.Config:
 
 
 def _scan(
-    ws, cfg: cfg_mod.Config, *, test_paths: tuple[str, ...] = (),
-) -> tuple[list[tuple[discovery.NodeDuration, eligibility.EligibilityResult]],
-           discovery.DiscoveryReport]:
+    ws,
+    cfg: cfg_mod.Config,
+    *,
+    test_paths: tuple[str, ...] = (),
+) -> tuple[
+    list[tuple[discovery.NodeDuration, eligibility.EligibilityResult]],
+    discovery.DiscoveryReport,
+]:
     scope = ", ".join(test_paths) if test_paths else "full suite"
     print(f"discovering slow tests ({scope}, with --durations=0) ...", file=sys.stderr)
     report = discovery.discover_verbose(
@@ -29,15 +34,19 @@ def _scan(
         pytest_paths=test_paths,
     )
     print(f"  pytest exit code: {report.returncode}", file=sys.stderr)
-    print(f"  found {len(report.durations)} test(s) at or above "
-          f"{cfg.test_selection.slow_threshold_seconds}s", file=sys.stderr)
+    print(
+        f"  found {len(report.durations)} test(s) at or above "
+        f"{cfg.test_selection.slow_threshold_seconds}s",
+        file=sys.stderr,
+    )
     results: list[tuple[discovery.NodeDuration, eligibility.EligibilityResult]] = []
     for nd in report.durations:
         test_file = ws.repo_dir / nd.nodeid.split("::")[0]
         if not test_file.exists():
             continue
         r = eligibility.check(
-            test_file, nd.nodeid,
+            test_file,
+            nd.nodeid,
             allow_pure_conftest_imports=cfg.eligibility.allow_pure_conftest_imports,
         )
         results.append((nd, r))
@@ -46,7 +55,8 @@ def _scan(
 
 def _print_human(
     candidates: list[tuple[discovery.NodeDuration, eligibility.EligibilityResult]],
-    *, limit: int = 50,
+    *,
+    limit: int = 50,
 ) -> None:
     eligible = [(nd, r) for nd, r in candidates if r.eligible]
     rejected = [(nd, r) for nd, r in candidates if not r.eligible]
@@ -109,12 +119,18 @@ def run(args: argparse.Namespace) -> int:
             for line in report.stderr_tail.splitlines():
                 print(f"    {line}", file=sys.stderr)
         if report.returncode == 5:
-            print("  → pytest collected zero tests. Check --test-path or "
-                  "required test deps.", file=sys.stderr)
+            print(
+                "  → pytest collected zero tests. Check --test-path or "
+                "required test deps.",
+                file=sys.stderr,
+            )
         else:
-            print("  → collection likely errored above. Install missing test "
-                  "deps via `spinwright prep ... --requirements <file>` and "
-                  "rebuild the workspace.", file=sys.stderr)
+            print(
+                "  → collection likely errored above. Install missing test "
+                "deps via `spinwright prep ... --requirements <file>` and "
+                "rebuild the workspace.",
+                file=sys.stderr,
+            )
 
     if args.json:
         _print_json(candidates, report)

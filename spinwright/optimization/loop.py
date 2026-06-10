@@ -84,14 +84,17 @@ def run_loop(
     repo_dir_resolved = ws.repo_dir.resolve()
 
     base_wt, base_vr, base_cg, cg_disabled = _dual_measure(
-        venv_python, extraction_path,
+        venv_python,
+        extraction_path,
         repeats=config.measurement.walltime_repeats,
         cwd=ws.repo_dir,
         config=config,
     )
     baseline = LoopBaseline(
-        walltime=base_wt, callgrind=base_cg,
-        callgrind_disabled_reason=cg_disabled, verify=base_vr,
+        walltime=base_wt,
+        callgrind=base_cg,
+        callgrind_disabled_reason=cg_disabled,
+        verify=base_vr,
     )
     if not base_vr.passed:
         return LoopResult(
@@ -118,18 +121,27 @@ def run_loop(
     for i in range(max_iters):
         try:
             prof = cprofile.profile_cprofile(
-                venv_python, extraction_path,
+                venv_python,
+                extraction_path,
                 iterations=200,
                 cwd=ws.repo_dir,
             )
         except DriverError as e:
             stop_reason = "infrastructure_error"
-            iterations.append(_failed_iteration(extraction_path, current_wt, current_cg,
-                                                f"cProfile driver failed: {e}"))
+            iterations.append(
+                _failed_iteration(
+                    extraction_path,
+                    current_wt,
+                    current_cg,
+                    f"cProfile driver failed: {e}",
+                )
+            )
             break
 
         focus = _select_focus(
-            prof, repo_dir_resolved, explored,
+            prof,
+            repo_dir_resolved,
+            explored,
             corpus_dir=config.corpus.dir,
         )
         if focus is None:
@@ -174,8 +186,14 @@ def run_loop(
 # ---------------------------------------------------------------------------
 
 
-_FUNCNAME_BLACKLIST = {"<module>", "<genexpr>", "<listcomp>", "<setcomp>",
-                       "<dictcomp>", "<lambda>"}
+_FUNCNAME_BLACKLIST = {
+    "<module>",
+    "<genexpr>",
+    "<listcomp>",
+    "<setcomp>",
+    "<dictcomp>",
+    "<lambda>",
+}
 
 
 def _select_focus(

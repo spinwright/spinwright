@@ -34,8 +34,10 @@ def _tiny_src_repo(tmp_path: Path) -> Path:
 def test_install_target_accepts_requirements_file(tmp_path: Path):
     src = _tiny_src_repo(tmp_path)
     ws = workspace.create(
-        source=str(src), ref=None,
-        branch_prefix="spinwright/", branch_suffix="venv-test",
+        source=str(src),
+        ref=None,
+        branch_prefix="spinwright/",
+        branch_suffix="venv-test",
         keep=True,
     )
     venv.create(ws)
@@ -49,7 +51,9 @@ def test_install_target_accepts_requirements_file(tmp_path: Path):
     # The editable install still landed.
     out = subprocess.run(
         [str(venv.python_executable(ws)), "-c", "import tiny; print(tiny.add(1, 2))"],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     assert out.stdout.strip() == "3"
     workspace.cleanup(ws)
@@ -58,8 +62,10 @@ def test_install_target_accepts_requirements_file(tmp_path: Path):
 def test_install_target_rejects_missing_requirements_file(tmp_path: Path):
     src = _tiny_src_repo(tmp_path)
     ws = workspace.create(
-        source=str(src), ref=None,
-        branch_prefix="spinwright/", branch_suffix="venv-test",
+        source=str(src),
+        ref=None,
+        branch_prefix="spinwright/",
+        branch_suffix="venv-test",
         keep=True,
     )
     venv.create(ws)
@@ -77,8 +83,10 @@ def test_workspace_create_uses_explicit_root(tmp_path: Path):
     src = _tiny_src_repo(tmp_path)
     explicit = tmp_path / "my-named-workspace"
     ws = workspace.create(
-        source=str(src), ref=None,
-        branch_prefix="spinwright/", branch_suffix="explicit",
+        source=str(src),
+        ref=None,
+        branch_prefix="spinwright/",
+        branch_suffix="explicit",
         keep=True,
         root=explicit,
     )
@@ -91,8 +99,10 @@ def test_workspace_create_makes_parent_dirs_for_explicit_root(tmp_path: Path):
     src = _tiny_src_repo(tmp_path)
     nested = tmp_path / "deeply" / "nested" / "ws"
     ws = workspace.create(
-        source=str(src), ref=None,
-        branch_prefix="spinwright/", branch_suffix="explicit",
+        source=str(src),
+        ref=None,
+        branch_prefix="spinwright/",
+        branch_suffix="explicit",
         keep=True,
         root=nested,
     )
@@ -107,8 +117,10 @@ def test_workspace_create_refuses_nonempty_explicit_root(tmp_path: Path):
     (explicit / "existing.txt").write_text("hi")
     with pytest.raises(FileExistsError, match="not empty"):
         workspace.create(
-            source=str(src), ref=None,
-            branch_prefix="spinwright/", branch_suffix="explicit",
+            source=str(src),
+            ref=None,
+            branch_prefix="spinwright/",
+            branch_suffix="explicit",
             keep=True,
             root=explicit,
         )
@@ -121,8 +133,10 @@ def test_workspace_create_accepts_empty_existing_explicit_root(tmp_path: Path):
     explicit = tmp_path / "ws"
     explicit.mkdir()  # exists but empty
     ws = workspace.create(
-        source=str(src), ref=None,
-        branch_prefix="spinwright/", branch_suffix="explicit",
+        source=str(src),
+        ref=None,
+        branch_prefix="spinwright/",
+        branch_suffix="explicit",
         keep=True,
         root=explicit,
     )

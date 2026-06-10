@@ -89,7 +89,9 @@ def extract(
         venv_python=venv_mod.python_executable(ws),
     )
     system_prompt = _build_system_prompt(target_path=target_path)
-    user_message = _build_user_message(nodeid=nodeid, test_meta=test_meta, target_path=target_path)
+    user_message = _build_user_message(
+        nodeid=nodeid, test_meta=test_meta, target_path=target_path
+    )
     chosen_model = model or config.models.reasoning
 
     conversation = run_conversation(
@@ -221,7 +223,9 @@ def _sanity_check(ws: Workspace, extraction_path: Path) -> tuple[bool, str | Non
     return False, err
 
 
-def _write_notes(*, notes_path: Path, ws: Workspace, nodeid: str, test_meta: dict) -> None:
+def _write_notes(
+    *, notes_path: Path, ws: Workspace, nodeid: str, test_meta: dict
+) -> None:
     now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     # Convert the source path to repo-relative so absolute paths (which include
     # /Users/<name>/...) don't end up committed to the target repo's history.
@@ -321,11 +325,13 @@ def _build_user_message(*, nodeid: str, test_meta: dict, target_path: Path) -> s
         lines.append("Decorators (already cleared by eligibility check):")
         for d in test_meta["decorators"]:
             lines.append(f"  {d}")
-    lines.extend([
-        "",
-        "Test source:",
-        "```python",
-        test_meta["source"],
-        "```",
-    ])
+    lines.extend(
+        [
+            "",
+            "Test source:",
+            "```python",
+            test_meta["source"],
+            "```",
+        ]
+    )
     return "\n".join(lines)

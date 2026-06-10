@@ -15,11 +15,15 @@ def _make_tools(tmp_path: Path):
     workspace = tmp_path / "ws"
     repo = workspace / "repo"
     repo.mkdir(parents=True)
-    return registry.build_extraction_tools(
-        workspace_root=workspace,
-        repo_dir=repo,
-        venv_python=PY,
-    ), workspace, repo
+    return (
+        registry.build_extraction_tools(
+            workspace_root=workspace,
+            repo_dir=repo,
+            venv_python=PY,
+        ),
+        workspace,
+        repo,
+    )
 
 
 def test_registry_returns_expected_tool_names(tmp_path: Path):

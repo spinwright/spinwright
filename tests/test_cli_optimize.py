@@ -20,6 +20,7 @@ from spinwright.repo.workspace import Workspace
 class FakeText:
     text: str
     type: str = "text"
+
     def model_dump(self, *, exclude_none: bool = True) -> dict:
         return {"type": "text", "text": self.text}
 
@@ -30,8 +31,14 @@ class FakeToolUse:
     name: str
     input: dict
     type: str = "tool_use"
+
     def model_dump(self, *, exclude_none: bool = True) -> dict:
-        return {"type": "tool_use", "id": self.id, "name": self.name, "input": self.input}
+        return {
+            "type": "tool_use",
+            "id": self.id,
+            "name": self.name,
+            "input": self.input,
+        }
 
 
 @dataclass
@@ -40,6 +47,7 @@ class FakeUsage:
     output_tokens: int = 0
     cache_creation_input_tokens: int = 0
     cache_read_input_tokens: int = 0
+
     def model_dump(self, *, exclude_none: bool = True) -> dict:
         return {
             "input_tokens": self.input_tokens,
@@ -104,7 +112,9 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
     (venv / "bin").mkdir(parents=True)
     (venv / "bin" / "python").symlink_to(Path(sys.executable))
     (repo / "target_pkg").mkdir(parents=True)
-    (repo / "target_pkg" / "__init__.py").write_text(textwrap.dedent(_SLOW).lstrip("\n"))
+    (repo / "target_pkg" / "__init__.py").write_text(
+        textwrap.dedent(_SLOW).lstrip("\n")
+    )
     extractions = repo / "spinwright"
     extractions.mkdir(parents=True)
     (extractions / "__init__.py").write_text("")
@@ -118,15 +128,22 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
         subprocess.run(cmd, cwd=repo, check=True, capture_output=True)
     base_sha = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", "HEAD"],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     subprocess.run(
         ["git", "-C", str(repo), "checkout", "-b", "spinwright/test"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return Workspace(
-        root=root, repo_dir=repo, venv_dir=venv,
-        branch="spinwright/test", base_sha=base_sha, keep=True,
+        root=root,
+        repo_dir=repo,
+        venv_dir=venv,
+        branch="spinwright/test",
+        base_sha=base_sha,
+        keep=True,
     ), ext_path
 
 
@@ -137,14 +154,22 @@ def test_optimize_cli_accepts_a_real_improvement(tmp_path: Path, capsys):
     client = FakeClient()
     client.messages.queue(
         FakeMessage(
-            content=[FakeToolUse(id="tu_1", name="edit_file", input={
-                "path": target_file,
-                "old_string": "time.sleep(0.005)\n    ",
-                "new_string": "",
-            })],
+            content=[
+                FakeToolUse(
+                    id="tu_1",
+                    name="edit_file",
+                    input={
+                        "path": target_file,
+                        "old_string": "time.sleep(0.005)\n    ",
+                        "new_string": "",
+                    },
+                )
+            ],
             stop_reason="tool_use",
         ),
-        FakeMessage(content=[FakeText(text="removed the sleep")], stop_reason="end_turn"),
+        FakeMessage(
+            content=[FakeText(text="removed the sleep")], stop_reason="end_turn"
+        ),
     )
 
     args = argparse.Namespace(
@@ -170,11 +195,17 @@ def test_optimize_cli_reports_rejection_with_diff(tmp_path: Path, capsys):
     # LLM makes a no-op edit that's clearly below threshold (just renames).
     client.messages.queue(
         FakeMessage(
-            content=[FakeToolUse(id="tu_1", name="edit_file", input={
-                "path": target_file,
-                "old_string": "def sum_squares(n):",
-                "new_string": "def sum_squares(n):  # tweaked",
-            })],
+            content=[
+                FakeToolUse(
+                    id="tu_1",
+                    name="edit_file",
+                    input={
+                        "path": target_file,
+                        "old_string": "def sum_squares(n):",
+                        "new_string": "def sum_squares(n):  # tweaked",
+                    },
+                )
+            ],
             stop_reason="tool_use",
         ),
         FakeMessage(content=[FakeText(text="cosmetic")], stop_reason="end_turn"),

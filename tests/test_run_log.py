@@ -13,9 +13,11 @@ from spinwright.pr.builder import PRDraft
 
 def _wt(median=0.001, repeats=5, iters=1000) -> WalltimeResult:
     return WalltimeResult(
-        best_seconds=median * 0.95, median_seconds=median,
+        best_seconds=median * 0.95,
+        median_seconds=median,
         stddev_seconds=median * 0.01,
-        iterations_per_repeat=iters, repeats=repeats,
+        iterations_per_repeat=iters,
+        repeats=repeats,
     )
 
 
@@ -24,7 +26,8 @@ def _minimal_loop() -> LoopResult:
         success=True,
         extraction_path=Path("/tmp/ext.py"),
         baseline=LoopBaseline(
-            walltime=_wt(), callgrind=None,
+            walltime=_wt(),
+            callgrind=None,
             callgrind_disabled_reason="macOS",
             verify=VerifyResult(passed=True, error=None),
         ),
@@ -53,8 +56,12 @@ def test_make_run_ids_are_unique_within_same_second():
 
 def test_write_run_directory_creates_pr_md(tmp_path: Path):
     loop = _minimal_loop()
-    pr = PRDraft(title="perf(x): test", body="## Summary\n\nbody body body\n",
-                 accepted_count=1, dropped_count=0)
+    pr = PRDraft(
+        title="perf(x): test",
+        body="## Summary\n\nbody body body\n",
+        accepted_count=1,
+        dropped_count=0,
+    )
     run_dir = run_log.write_run_directory(
         runs_root=tmp_path / "runs",
         run_id="test_run",
@@ -72,8 +79,10 @@ def test_write_run_directory_creates_pr_md(tmp_path: Path):
 def test_write_run_directory_serializes_loop_and_regression(tmp_path: Path):
     loop = _minimal_loop()
     reg = RegressionResult(
-        passed=True, dropped_commits=["abc", "def"],
-        final_pytest_output="ok", fallback_used="linear_revert",
+        passed=True,
+        dropped_commits=["abc", "def"],
+        final_pytest_output="ok",
+        fallback_used="linear_revert",
     )
     pr = PRDraft(title="t", body="b", accepted_count=2, dropped_count=2)
     run_dir = run_log.write_run_directory(
@@ -112,12 +121,18 @@ def test_write_run_directory_overwrites_existing(tmp_path: Path):
     pr = PRDraft(title="t", body="b1", accepted_count=1, dropped_count=0)
     runs_root = tmp_path / "runs"
     run_log.write_run_directory(
-        runs_root=runs_root, run_id="r",
-        pr_draft=pr, loop_result=loop, regression=None,
+        runs_root=runs_root,
+        run_id="r",
+        pr_draft=pr,
+        loop_result=loop,
+        regression=None,
     )
     pr2 = PRDraft(title="t", body="b2 updated", accepted_count=1, dropped_count=0)
     run_log.write_run_directory(
-        runs_root=runs_root, run_id="r",
-        pr_draft=pr2, loop_result=loop, regression=None,
+        runs_root=runs_root,
+        run_id="r",
+        pr_draft=pr2,
+        loop_result=loop,
+        regression=None,
     )
     assert "b2 updated" in (runs_root / "r" / "PR.md").read_text()

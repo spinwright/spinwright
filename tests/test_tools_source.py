@@ -15,6 +15,7 @@ PY = Path(sys.executable)
 
 # Source-level tests (get_test_source) use a tmp Python file; no venv needed.
 
+
 def _write_tests_file(tmp_path: Path, body: str) -> Path:
     p = tmp_path / "test_mod.py"
     p.write_text(textwrap.dedent(body).lstrip("\n"))
@@ -22,7 +23,9 @@ def _write_tests_file(tmp_path: Path, body: str) -> Path:
 
 
 def test_get_test_source_returns_function_slice(tmp_path: Path):
-    _write_tests_file(tmp_path, """
+    _write_tests_file(
+        tmp_path,
+        """
         import pytest
 
         @pytest.mark.smoke
@@ -31,24 +34,30 @@ def test_get_test_source_returns_function_slice(tmp_path: Path):
 
         def test_beta():
             assert True
-    """)
+    """,
+    )
     result = source.get_test_source(tmp_path, "test_mod.py::test_alpha")
     assert result["kind"] == "function"
     assert result["class_name"] is None
-    assert result["lineno"] == 4  # ast.FunctionDef.lineno is the `def` line, not the decorator
+    assert (
+        result["lineno"] == 4
+    )  # ast.FunctionDef.lineno is the `def` line, not the decorator
     assert "def test_alpha" in result["source"]
     assert "test_beta" not in result["source"]
     assert any("@pytest.mark.smoke" in d for d in result["decorators"])
 
 
 def test_get_test_source_returns_method_slice(tmp_path: Path):
-    _write_tests_file(tmp_path, """
+    _write_tests_file(
+        tmp_path,
+        """
         import unittest
 
         class TestThing(unittest.TestCase):
             def test_method(self):
                 self.assertEqual(2 + 2, 4)
-    """)
+    """,
+    )
     result = source.get_test_source(tmp_path, "test_mod.py::TestThing::test_method")
     assert result["kind"] == "method"
     assert result["class_name"] == "TestThing"
@@ -56,13 +65,16 @@ def test_get_test_source_returns_method_slice(tmp_path: Path):
 
 
 def test_get_test_source_strips_parametrize_suffix(tmp_path: Path):
-    _write_tests_file(tmp_path, """
+    _write_tests_file(
+        tmp_path,
+        """
         import pytest
 
         @pytest.mark.parametrize('n', [1, 2])
         def test_p(n):
             assert n > 0
-    """)
+    """,
+    )
     result = source.get_test_source(tmp_path, "test_mod.py::test_p[1]")
     assert "def test_p" in result["source"]
 
@@ -111,12 +123,9 @@ def test_read_source_raises_for_unknown_qualname():
 def _init_tiny_pytest_repo(tmp_path: Path) -> Path:
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_a.py").write_text(
-        "def test_one(): assert True\n"
-        "def test_two(): assert True\n"
+        "def test_one(): assert True\ndef test_two(): assert True\n"
     )
-    (tmp_path / "tests" / "test_b.py").write_text(
-        "def test_three(): assert True\n"
-    )
+    (tmp_path / "tests" / "test_b.py").write_text("def test_three(): assert True\n")
     return tmp_path
 
 

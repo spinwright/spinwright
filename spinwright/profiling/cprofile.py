@@ -88,4 +88,6 @@ def top_entries(
     """Sort entries by 'tottime' or 'cumtime' and slice to ``limit``."""
     if by not in {"tottime", "cumtime", "tottime_per_call", "cumtime_per_call"}:
         raise ValueError(f"unknown sort key: {by!r}")
-    return tuple(sorted(result.entries, key=lambda e: getattr(e, by), reverse=True)[:limit])
+    return tuple(
+        sorted(result.entries, key=lambda e: getattr(e, by), reverse=True)[:limit]
+    )

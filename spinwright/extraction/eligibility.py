@@ -7,7 +7,17 @@ from pathlib import Path
 
 # Categories of risky top-level module names. Matched against the dotted module
 # path's first component (so "urllib.request" matches "urllib").
-_NETWORK_TOP_LEVELS = {"socket", "urllib", "urllib3", "http", "requests", "httpx", "aiohttp", "ftplib", "smtplib"}
+_NETWORK_TOP_LEVELS = {
+    "socket",
+    "urllib",
+    "urllib3",
+    "http",
+    "requests",
+    "httpx",
+    "aiohttp",
+    "ftplib",
+    "smtplib",
+}
 _SUBPROCESS_TOP_LEVELS = {"subprocess"}
 _HYPOTHESIS_TOP_LEVELS = {"hypothesis"}
 
@@ -63,14 +73,18 @@ def check(
     # 2. Resolve the test node
     parts = nodeid.split("::")[1:]
     if not parts:
-        reasons.append(Reason("nodeid_invalid", f"nodeid has no test component: {nodeid!r}"))
+        reasons.append(
+            Reason("nodeid_invalid", f"nodeid has no test component: {nodeid!r}")
+        )
         return EligibilityResult(False, tuple(reasons))
     # Strip parametrize id suffix from the last component (e.g. "test_x[1]" → "test_x").
     parts[-1] = parts[-1].split("[", 1)[0]
 
     test_func, class_node = _resolve_test(tree, parts)
     if test_func is None:
-        reasons.append(Reason("not_found", f"test {nodeid!r} not found in {source_path.name}"))
+        reasons.append(
+            Reason("not_found", f"test {nodeid!r} not found in {source_path.name}")
+        )
         return EligibilityResult(False, tuple(reasons))
 
     # 3. Decorator + signature + body checks on the test function itself
@@ -124,14 +138,24 @@ def _check_module_imports(
             )
             if is_conftest and not allow_pure_conftest_imports:
                 reasons.append(
-                    Reason("conftest_import", f"imports from sibling conftest ({module or 'conftest'})", node.lineno)
+                    Reason(
+                        "conftest_import",
+                        f"imports from sibling conftest ({module or 'conftest'})",
+                        node.lineno,
+                    )
                 )
             if module:
                 reasons.extend(_classify_module_import(module, node.lineno))
             for alias in node.names:
-                if alias.name in _HYPOTHESIS_DECORATOR_NAMES and module.startswith("hypothesis"):
+                if alias.name in _HYPOTHESIS_DECORATOR_NAMES and module.startswith(
+                    "hypothesis"
+                ):
                     reasons.append(
-                        Reason("hypothesis_import", f"imports hypothesis.{alias.name}", node.lineno)
+                        Reason(
+                            "hypothesis_import",
+                            f"imports hypothesis.{alias.name}",
+                            node.lineno,
+                        )
                     )
     return reasons
 
@@ -145,7 +169,9 @@ def _classify_module_import(module: str, lineno: int) -> list[Reason]:
     out: list[Reason] = []
     top = module.split(".")[0]
     if top in _HYPOTHESIS_TOP_LEVELS:
-        out.append(Reason("hypothesis_import", f"imports hypothesis ({module!r})", lineno))
+        out.append(
+            Reason("hypothesis_import", f"imports hypothesis ({module!r})", lineno)
+        )
     return out
 
 
@@ -183,11 +209,15 @@ def _check_decorators(func: ast.FunctionDef) -> list[Reason]:
     for deco in func.decorator_list:
         # @given(...) or @given
         if isinstance(deco, ast.Name) and deco.id in _HYPOTHESIS_DECORATOR_NAMES:
-            reasons.append(Reason("hypothesis_decorator", f"@{deco.id} decorator", deco.lineno))
+            reasons.append(
+                Reason("hypothesis_decorator", f"@{deco.id} decorator", deco.lineno)
+            )
             continue
         target = deco.func if isinstance(deco, ast.Call) else deco
         if isinstance(target, ast.Name) and target.id in _HYPOTHESIS_DECORATOR_NAMES:
-            reasons.append(Reason("hypothesis_decorator", f"@{target.id} decorator", deco.lineno))
+            reasons.append(
+                Reason("hypothesis_decorator", f"@{target.id} decorator", deco.lineno)
+            )
             continue
         # @pytest.mark.X or @something.mark.X
         attr_chain = _attribute_chain(target)
@@ -195,7 +225,11 @@ def _check_decorators(func: ast.FunctionDef) -> list[Reason]:
             marker = attr_chain[-1]
             if marker in _INVOCATION_MARKERS:
                 reasons.append(
-                    Reason("pytest_marker", f"@{'.'.join(attr_chain)} changes test invocation", deco.lineno)
+                    Reason(
+                        "pytest_marker",
+                        f"@{'.'.join(attr_chain)} changes test invocation",
+                        deco.lineno,
+                    )
                 )
     return reasons
 
@@ -211,7 +245,11 @@ def _check_signature(func: ast.FunctionDef) -> list[Reason]:
         if arg.arg in _FIXTURE_WHITELIST:
             continue
         reasons.append(
-            Reason("fixture_arg", f"signature uses non-whitelisted parameter {arg.arg!r}", func.lineno)
+            Reason(
+                "fixture_arg",
+                f"signature uses non-whitelisted parameter {arg.arg!r}",
+                func.lineno,
+            )
         )
     return reasons
 
@@ -240,17 +278,29 @@ def _check_body(func: ast.FunctionDef, aliases: dict[str, str]) -> list[Reason]:
             # network / subprocess usage via attribute access
             if top in _NETWORK_TOP_LEVELS:
                 reasons.append(
-                    Reason("network_call", f"call to {dotted!r} touches network", node.lineno)
+                    Reason(
+                        "network_call",
+                        f"call to {dotted!r} touches network",
+                        node.lineno,
+                    )
                 )
             if top in _SUBPROCESS_TOP_LEVELS:
                 reasons.append(
-                    Reason("subprocess_call", f"call to {dotted!r} runs a subprocess", node.lineno)
+                    Reason(
+                        "subprocess_call",
+                        f"call to {dotted!r} runs a subprocess",
+                        node.lineno,
+                    )
                 )
 
             # Filesystem outside tempfile: bare `open(...)` is the easy catch.
             if dotted == "open":
                 reasons.append(
-                    Reason("filesystem_open", "call to open() — direct filesystem access", node.lineno)
+                    Reason(
+                        "filesystem_open",
+                        "call to open() — direct filesystem access",
+                        node.lineno,
+                    )
                 )
 
             # Randomness — module form: random.X / numpy.random.X
@@ -341,9 +391,11 @@ def _is_simple_self_assign(stmt: ast.Assign) -> bool:
     if len(stmt.targets) != 1:
         return False
     target = stmt.targets[0]
-    if not (isinstance(target, ast.Attribute)
-            and isinstance(target.value, ast.Name)
-            and target.value.id == "self"):
+    if not (
+        isinstance(target, ast.Attribute)
+        and isinstance(target.value, ast.Name)
+        and target.value.id == "self"
+    ):
         return False
     return _is_safe_literal(stmt.value)
 
@@ -354,8 +406,9 @@ def _is_safe_literal(node: ast.expr) -> bool:
     if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
         return all(_is_safe_literal(elt) for elt in node.elts)
     if isinstance(node, ast.Dict):
-        return all(_is_safe_literal(k) for k in node.keys if k is not None) \
-            and all(_is_safe_literal(v) for v in node.values)
+        return all(_is_safe_literal(k) for k in node.keys if k is not None) and all(
+            _is_safe_literal(v) for v in node.values
+        )
     return False
 
 

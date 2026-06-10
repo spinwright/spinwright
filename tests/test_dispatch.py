@@ -35,7 +35,12 @@ class FakeToolUse:
     type: str = "tool_use"
 
     def model_dump(self, *, exclude_none: bool = True) -> dict:
-        return {"type": "tool_use", "id": self.id, "name": self.name, "input": self.input}
+        return {
+            "type": "tool_use",
+            "id": self.id,
+            "name": self.name,
+            "input": self.input,
+        }
 
 
 @dataclass
@@ -92,7 +97,8 @@ def _tool(name: str, handler, *, schema=None) -> ToolDefinition:
     return ToolDefinition(
         name=name,
         description=f"test tool {name}",
-        input_schema=schema or {"type": "object", "properties": {}, "additionalProperties": True},
+        input_schema=schema
+        or {"type": "object", "properties": {}, "additionalProperties": True},
         handler=handler,
     )
 

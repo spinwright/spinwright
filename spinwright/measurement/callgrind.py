@@ -67,7 +67,10 @@ def measure_callgrind(
 
     # Probe wallclock to estimate per-call cost for auto-scaling.
     probe_wt, probe_vr = walltime.measure(
-        venv_python, extraction_path, repeats=1, cwd=effective_cwd,
+        venv_python,
+        extraction_path,
+        repeats=1,
+        cwd=effective_cwd,
     )
     if not probe_vr.passed:
         return _empty_callgrind(), probe_vr
@@ -78,7 +81,9 @@ def measure_callgrind(
     out_b = tmpdir / "out.b"
 
     inst_a, vr_a = _run_under_callgrind(
-        venv_python, extraction_path, n + 1,
+        venv_python,
+        extraction_path,
+        n + 1,
         valgrind_path=valgrind_path,
         out_path=out_a,
         cwd=effective_cwd,
@@ -88,7 +93,9 @@ def measure_callgrind(
         return _empty_callgrind(), vr_a
 
     inst_b, vr_b = _run_under_callgrind(
-        venv_python, extraction_path, 1,
+        venv_python,
+        extraction_path,
+        1,
         valgrind_path=valgrind_path,
         out_path=out_b,
         cwd=effective_cwd,
@@ -162,9 +169,13 @@ def _run_under_callgrind(
     # its own when --quiet is set; the entire stdout should be the driver JSON.
     try:
         payload = json.loads(proc.stdout)
-        vr = VerifyResult(passed=payload["verify_passed"], error=payload.get("verify_error"))
+        vr = VerifyResult(
+            passed=payload["verify_passed"], error=payload.get("verify_error")
+        )
     except (json.JSONDecodeError, KeyError):
-        vr = VerifyResult(passed=False, error=f"driver stdout was not JSON: {proc.stdout!r}")
+        vr = VerifyResult(
+            passed=False, error=f"driver stdout was not JSON: {proc.stdout!r}"
+        )
 
     inst = parse_summary(out_path)
     return inst, vr

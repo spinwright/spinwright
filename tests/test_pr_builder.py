@@ -15,8 +15,13 @@ from spinwright.pr import builder
 # ---------------------------------------------------------------------------
 
 
-def _wt(median: float, best: float | None = None, stddev: float = 0.0,
-        iters: int = 1000, repeats: int = 5) -> WalltimeResult:
+def _wt(
+    median: float,
+    best: float | None = None,
+    stddev: float = 0.0,
+    iters: int = 1000,
+    repeats: int = 5,
+) -> WalltimeResult:
     return WalltimeResult(
         best_seconds=best if best is not None else median * 0.95,
         median_seconds=median,
@@ -46,7 +51,9 @@ def _conv(final_text: str, tool_calls=None) -> ConversationResult:
 
 
 def _iteration(
-    *, accepted: bool, diff: str = "",
+    *,
+    accepted: bool,
+    diff: str = "",
     walltime_delta: float | None = None,
     callgrind_delta: float | None = None,
     gate: str = "walltime_median",
@@ -60,9 +67,13 @@ def _iteration(
         baseline_walltime=_wt(1.0),
         candidate_walltime=_wt(1.0 * (1 - (walltime_delta or 0.0))),
         baseline_callgrind=_cg(1_000_000) if callgrind_delta is not None else None,
-        candidate_callgrind=_cg(int(1_000_000 * (1 - callgrind_delta))) if callgrind_delta is not None else None,
+        candidate_callgrind=_cg(int(1_000_000 * (1 - callgrind_delta)))
+        if callgrind_delta is not None
+        else None,
         candidate_verify=VerifyResult(passed=True, error=None),
-        relative_improvement=callgrind_delta if gate == "callgrind_instructions" else walltime_delta,
+        relative_improvement=callgrind_delta
+        if gate == "callgrind_instructions"
+        else walltime_delta,
         relative_walltime_improvement=walltime_delta,
         relative_callgrind_improvement=callgrind_delta,
         gate_metric=gate,
@@ -75,11 +86,15 @@ def _iteration(
     )
 
 
-def _loop_result(*iterations: OptimizationResult,
-                 final_wt: WalltimeResult | None = None,
-                 final_cg: CallgrindResult | None = None) -> LoopResult:
+def _loop_result(
+    *iterations: OptimizationResult,
+    final_wt: WalltimeResult | None = None,
+    final_cg: CallgrindResult | None = None,
+) -> LoopResult:
     base_wt = _wt(1.0)
-    base_cg = _cg(1_000_000) if any(it.baseline_callgrind for it in iterations) else None
+    base_cg = (
+        _cg(1_000_000) if any(it.baseline_callgrind for it in iterations) else None
+    )
     accepted_indices = [i for i, it in enumerate(iterations) if it.accepted]
     return LoopResult(
         success=True,
@@ -99,7 +114,9 @@ def _loop_result(*iterations: OptimizationResult,
     )
 
 
-def _meta(tmp_path: Path, nodeid: str = "tests/test_x.py::test_foo") -> builder.ExtractionMetadata:
+def _meta(
+    tmp_path: Path, nodeid: str = "tests/test_x.py::test_foo"
+) -> builder.ExtractionMetadata:
     return builder.ExtractionMetadata(
         extraction_path=tmp_path / "spinwright" / "ext.py",
         original_nodeid=nodeid,
@@ -129,8 +146,12 @@ index 111..222 100644
 def test_title_no_survivors(tmp_path: Path):
     loop = _loop_result(_iteration(accepted=False, final_text="nothing"))
     pr = builder.build_pr(
-        loop_result=loop, regression=None, extraction=_meta(tmp_path),
-        run_id="r1", reasoning_model="claude-opus-4-7", repo_dir=tmp_path,
+        loop_result=loop,
+        regression=None,
+        extraction=_meta(tmp_path),
+        run_id="r1",
+        reasoning_model="claude-opus-4-7",
+        repo_dir=tmp_path,
     )
     assert pr.title.startswith("perf(")
     assert "no improvements" in pr.title
@@ -140,16 +161,22 @@ def test_title_no_survivors(tmp_path: Path):
 def test_title_one_survivor_uses_summary(tmp_path: Path):
     loop = _loop_result(
         _iteration(
-            accepted=True, diff=_DIFF_ONE_FILE,
-            walltime_delta=0.30, gate="walltime_median",
+            accepted=True,
+            diff=_DIFF_ONE_FILE,
+            walltime_delta=0.30,
+            gate="walltime_median",
             final_text="Swapped the list comprehension for a builtin list() call.",
             sha="aaa111",
         ),
         final_wt=_wt(0.70),
     )
     pr = builder.build_pr(
-        loop_result=loop, regression=None, extraction=_meta(tmp_path),
-        run_id="r1", reasoning_model="claude-opus-4-7", repo_dir=tmp_path,
+        loop_result=loop,
+        regression=None,
+        extraction=_meta(tmp_path),
+        run_id="r1",
+        reasoning_model="claude-opus-4-7",
+        repo_dir=tmp_path,
     )
     assert "perf(static_frame.core.index)" in pr.title
     assert "Swapped the list comprehension" in pr.title
@@ -166,8 +193,12 @@ def test_title_multi_survivor_uses_count(tmp_path: Path):
         final_wt=_wt(0.50),
     )
     pr = builder.build_pr(
-        loop_result=loop, regression=None, extraction=_meta(tmp_path),
-        run_id="r1", reasoning_model="claude-opus-4-7", repo_dir=tmp_path,
+        loop_result=loop,
+        regression=None,
+        extraction=_meta(tmp_path),
+        run_id="r1",
+        reasoning_model="claude-opus-4-7",
+        repo_dir=tmp_path,
     )
     assert "2 optimizations" in pr.title
     # Most-touched module is whichever has more entries; with one diff each
@@ -178,17 +209,24 @@ def test_title_multi_survivor_uses_count(tmp_path: Path):
 def test_title_callgrind_metric_label(tmp_path: Path):
     loop = _loop_result(
         _iteration(
-            accepted=True, diff=_DIFF_ONE_FILE,
-            walltime_delta=0.10, callgrind_delta=0.40,
+            accepted=True,
+            diff=_DIFF_ONE_FILE,
+            walltime_delta=0.10,
+            callgrind_delta=0.40,
             gate="callgrind_instructions",
-            final_text="A clear win.", sha="aaa",
+            final_text="A clear win.",
+            sha="aaa",
         ),
         final_wt=_wt(0.90),
         final_cg=_cg(600_000),
     )
     pr = builder.build_pr(
-        loop_result=loop, regression=None, extraction=_meta(tmp_path),
-        run_id="r1", reasoning_model="claude-opus-4-7", repo_dir=tmp_path,
+        loop_result=loop,
+        regression=None,
+        extraction=_meta(tmp_path),
+        run_id="r1",
+        reasoning_model="claude-opus-4-7",
+        repo_dir=tmp_path,
     )
     assert "−40% instructions" in pr.title
 
@@ -201,16 +239,21 @@ def test_title_callgrind_metric_label(tmp_path: Path):
 def test_body_has_all_sections(tmp_path: Path):
     loop = _loop_result(
         _iteration(
-            accepted=True, diff=_DIFF_ONE_FILE,
-            walltime_delta=0.25, sha="aaa111bbb",
+            accepted=True,
+            diff=_DIFF_ONE_FILE,
+            walltime_delta=0.25,
+            sha="aaa111bbb",
             final_text="Removed an unnecessary copy.",
         ),
         final_wt=_wt(0.75),
     )
     pr = builder.build_pr(
-        loop_result=loop, regression=None, extraction=_meta(tmp_path),
+        loop_result=loop,
+        regression=None,
+        extraction=_meta(tmp_path),
         run_id="run_20260529_120000",
-        reasoning_model="claude-opus-4-7", repo_dir=tmp_path,
+        reasoning_model="claude-opus-4-7",
+        repo_dir=tmp_path,
     )
     body = pr.body
     assert "## Summary" in body
@@ -231,18 +274,35 @@ def test_body_has_all_sections(tmp_path: Path):
 
 def test_body_quotes_dropped_patches(tmp_path: Path):
     loop = _loop_result(
-        _iteration(accepted=True, diff=_DIFF_ONE_FILE, walltime_delta=0.30, sha="aaa", final_text="A"),
-        _iteration(accepted=True, diff=_DIFF_ONE_FILE.replace("index.py", "frame.py"),
-                   walltime_delta=0.25, sha="bbb", final_text="B"),
+        _iteration(
+            accepted=True,
+            diff=_DIFF_ONE_FILE,
+            walltime_delta=0.30,
+            sha="aaa",
+            final_text="A",
+        ),
+        _iteration(
+            accepted=True,
+            diff=_DIFF_ONE_FILE.replace("index.py", "frame.py"),
+            walltime_delta=0.25,
+            sha="bbb",
+            final_text="B",
+        ),
         final_wt=_wt(0.50),
     )
     reg = RegressionResult(
-        passed=True, dropped_commits=["bbb"],
-        final_pytest_output="all good", fallback_used="linear_revert",
+        passed=True,
+        dropped_commits=["bbb"],
+        final_pytest_output="all good",
+        fallback_used="linear_revert",
     )
     pr = builder.build_pr(
-        loop_result=loop, regression=reg, extraction=_meta(tmp_path),
-        run_id="r1", reasoning_model="claude-opus-4-7", repo_dir=tmp_path,
+        loop_result=loop,
+        regression=reg,
+        extraction=_meta(tmp_path),
+        run_id="r1",
+        reasoning_model="claude-opus-4-7",
+        repo_dir=tmp_path,
     )
     assert pr.accepted_count == 1
     assert pr.dropped_count == 1
@@ -254,8 +314,12 @@ def test_body_quotes_dropped_patches(tmp_path: Path):
 def test_body_no_survivors_section_is_compact(tmp_path: Path):
     loop = _loop_result(_iteration(accepted=False, final_text="nope"))
     pr = builder.build_pr(
-        loop_result=loop, regression=None, extraction=_meta(tmp_path),
-        run_id="r1", reasoning_model="claude-opus-4-7", repo_dir=tmp_path,
+        loop_result=loop,
+        regression=None,
+        extraction=_meta(tmp_path),
+        run_id="r1",
+        reasoning_model="claude-opus-4-7",
+        repo_dir=tmp_path,
     )
     assert "no improvements clearing the gate threshold" in pr.body
     assert "informational only" in pr.body
@@ -272,7 +336,10 @@ def test_module_from_path_with_init():
 
 
 def test_module_from_path_strips_diff_prefix():
-    assert builder._module_from_path("a/static_frame/core/index.py") == "static_frame.core.index"
+    assert (
+        builder._module_from_path("a/static_frame/core/index.py")
+        == "static_frame.core.index"
+    )
 
 
 def test_diff_paths_extracts_files():

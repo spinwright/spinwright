@@ -37,7 +37,12 @@ class FakeToolUse:
     type: str = "tool_use"
 
     def model_dump(self, *, exclude_none: bool = True) -> dict:
-        return {"type": "tool_use", "id": self.id, "name": self.name, "input": self.input}
+        return {
+            "type": "tool_use",
+            "id": self.id,
+            "name": self.name,
+            "input": self.input,
+        }
 
 
 @dataclass
@@ -97,7 +102,9 @@ def _make_workspace(tmp_path: Path, test_source: str) -> Workspace:
     (venv_dir / "bin" / "python").symlink_to(Path(sys.executable))
 
     (repo / "tests").mkdir(parents=True)
-    (repo / "tests" / "test_mod.py").write_text(textwrap.dedent(test_source).lstrip("\n"))
+    (repo / "tests" / "test_mod.py").write_text(
+        textwrap.dedent(test_source).lstrip("\n")
+    )
     # Trivial package so the extraction can `from target_pkg import ...`
     (repo / "target_pkg").mkdir()
     (repo / "target_pkg" / "__init__.py").write_text(
@@ -112,11 +119,14 @@ def _make_workspace(tmp_path: Path, test_source: str) -> Workspace:
         subprocess.run(cmd, cwd=repo, check=True, capture_output=True)
     base_sha = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", "HEAD"],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     subprocess.run(
         ["git", "-C", str(repo), "checkout", "-b", "spinwright/test"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return Workspace(
         root=root,
@@ -138,10 +148,12 @@ _DEFAULT_TEST = """
 
 
 def _config(corpus_dir: str = "extractions") -> cfg_mod.Config:
-    return cfg_mod.from_dict({
-        "corpus": {"dir": corpus_dir},
-        "budget": {"max_extraction_turns": 6},
-    })
+    return cfg_mod.from_dict(
+        {
+            "corpus": {"dir": corpus_dir},
+            "budget": {"max_extraction_turns": 6},
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +162,10 @@ def _config(corpus_dir: str = "extractions") -> cfg_mod.Config:
 
 
 def test_sanitize_function_id():
-    assert extract.sanitize_test_id("tests/test_foo.py::test_bar") == "tests_test_foo__test_bar"
+    assert (
+        extract.sanitize_test_id("tests/test_foo.py::test_bar")
+        == "tests_test_foo__test_bar"
+    )
 
 
 def test_sanitize_method_id():
@@ -203,7 +218,11 @@ def test_happy_path_writes_commits_and_succeeds(tmp_path: Path):
                         # corpus path — the LLM is supposed to use it. We
                         # mirror that here by writing into corpus_dir.
                         "path": str(
-                            (ws.repo_dir / "extractions" / "tests_test_mod__test_sum_of_squares.py").resolve()
+                            (
+                                ws.repo_dir
+                                / "extractions"
+                                / "tests_test_mod__test_sum_of_squares.py"
+                            ).resolve()
                         ),
                         "content": _GOOD_EXTRACTION.lstrip("\n"),
                     },
@@ -256,11 +275,21 @@ def test_sanity_failure_does_not_commit(tmp_path: Path):
     ws = _make_workspace(tmp_path, _DEFAULT_TEST)
     cfg = _config()
 
-    target = str((ws.repo_dir / "extractions" / "tests_test_mod__test_sum_of_squares.py").resolve())
+    target = str(
+        (
+            ws.repo_dir / "extractions" / "tests_test_mod__test_sum_of_squares.py"
+        ).resolve()
+    )
     client = FakeClient()
     client.messages.queue(
         FakeMessage(
-            content=[FakeToolUse(id="tu_1", name="write_file", input={"path": target, "content": _BROKEN_EXTRACTION.lstrip("\n")})],
+            content=[
+                FakeToolUse(
+                    id="tu_1",
+                    name="write_file",
+                    input={"path": target, "content": _BROKEN_EXTRACTION.lstrip("\n")},
+                )
+            ],
             stop_reason="tool_use",
         ),
         FakeMessage(content=[FakeText(text="should be good")], stop_reason="end_turn"),
@@ -278,10 +307,16 @@ def test_sanity_failure_does_not_commit(tmp_path: Path):
     assert "AssertionError" in result.sanity_error
     assert result.commit_sha is None
     # Working branch should have no new commits beyond init
-    log = subprocess.run(
-        ["git", "-C", str(ws.repo_dir), "log", "--oneline"],
-        capture_output=True, text=True, check=True,
-    ).stdout.strip().splitlines()
+    log = (
+        subprocess.run(
+            ["git", "-C", str(ws.repo_dir), "log", "--oneline"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        .stdout.strip()
+        .splitlines()
+    )
     assert len(log) == 1
 
 
@@ -295,7 +330,10 @@ def test_missing_extraction_reports_failure(tmp_path: Path):
     cfg = _config()
     client = FakeClient()
     client.messages.queue(
-        FakeMessage(content=[FakeText(text="I refuse to write the file")], stop_reason="end_turn"),
+        FakeMessage(
+            content=[FakeText(text="I refuse to write the file")],
+            stop_reason="end_turn",
+        ),
     )
     result = extract.extract(
         ws=ws,
@@ -326,7 +364,9 @@ _INELIGIBLE_TEST = """
 def test_ineligible_test_short_circuits(tmp_path: Path):
     ws = _make_workspace(tmp_path, _INELIGIBLE_TEST)
     cfg = _config()
-    client = FakeClient()  # no responses queued — if extract calls the LLM, AssertionError
+    client = (
+        FakeClient()
+    )  # no responses queued — if extract calls the LLM, AssertionError
 
     result = extract.extract(
         ws=ws,

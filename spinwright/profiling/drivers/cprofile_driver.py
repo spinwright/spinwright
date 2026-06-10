@@ -62,26 +62,32 @@ def main() -> int:
         # filter out excluded paths
         if excludes and any(ex in (filename or "") for ex in excludes):
             continue
-        entries.append({
-            "filename": filename,
-            "lineno": lineno,
-            "funcname": funcname,
-            "calls": nc,
-            "primitive_calls": cc,
-            "tottime": tt,        # time in this function alone
-            "cumtime": ct,        # time in this function + all subcalls
-            "tottime_per_call": (tt / nc) if nc else 0.0,
-            "cumtime_per_call": (ct / nc) if nc else 0.0,
-        })
+        entries.append(
+            {
+                "filename": filename,
+                "lineno": lineno,
+                "funcname": funcname,
+                "calls": nc,
+                "primitive_calls": cc,
+                "tottime": tt,  # time in this function alone
+                "cumtime": ct,  # time in this function + all subcalls
+                "tottime_per_call": (tt / nc) if nc else 0.0,
+                "cumtime_per_call": (ct / nc) if nc else 0.0,
+            }
+        )
 
     total = stats.total_tt or 0.0
-    sys.stdout.write(json.dumps({
-        "iterations": iterations,
-        "total_seconds": total,
-        "entries": entries,
-        "verify_passed": verify_passed,
-        "verify_error": verify_error,
-    }))
+    sys.stdout.write(
+        json.dumps(
+            {
+                "iterations": iterations,
+                "total_seconds": total,
+                "entries": entries,
+                "verify_passed": verify_passed,
+                "verify_error": verify_error,
+            }
+        )
+    )
     return 0
 
 

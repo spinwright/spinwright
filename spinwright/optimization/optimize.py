@@ -34,9 +34,9 @@ class FocusHint:
     funcname: str
     filename: str
     lineno: int
-    qualname: str | None = None     # Best-effort dotted name; may be None.
+    qualname: str | None = None  # Best-effort dotted name; may be None.
     cumtime_seconds: float | None = None  # From the picking profile, if any.
-    explored_key: str = ""          # Stable key for `explored` membership.
+    explored_key: str = ""  # Stable key for `explored` membership.
 
 
 @dataclass
@@ -48,10 +48,10 @@ class OptimizationResult:
     baseline_callgrind: CallgrindResult | None
     candidate_callgrind: CallgrindResult | None
     candidate_verify: VerifyResult | None
-    relative_improvement: float | None      # primary metric (see gate_metric)
+    relative_improvement: float | None  # primary metric (see gate_metric)
     relative_walltime_improvement: float | None
     relative_callgrind_improvement: float | None
-    gate_metric: str                        # "callgrind_instructions" | "walltime_median" | "none"
+    gate_metric: str  # "callgrind_instructions" | "walltime_median" | "none"
     threshold: float
     diff: str
     commit_sha: str | None
@@ -89,7 +89,11 @@ def optimize_once(
     repeats = config.measurement.walltime_repeats
 
     baseline_wt, baseline_vr, baseline_cg, callgrind_disabled_reason = _dual_measure(
-        venv_python, extraction_path, repeats=repeats, cwd=ws.repo_dir, config=config,
+        venv_python,
+        extraction_path,
+        repeats=repeats,
+        cwd=ws.repo_dir,
+        config=config,
     )
     if not baseline_vr.passed:
         return OptimizationResult(
@@ -119,7 +123,9 @@ def optimize_once(
         extraction_path=extraction_path,
         profile_default_iterations=config.measurement.walltime_repeats * 200,
     )
-    primary_metric = "callgrind_instructions" if baseline_cg is not None else "walltime_median"
+    primary_metric = (
+        "callgrind_instructions" if baseline_cg is not None else "walltime_median"
+    )
     system_prompt = _build_system_prompt(
         threshold=threshold,
         extra_excludes=extra_excludes,
@@ -169,8 +175,12 @@ def optimize_once(
 
     try:
         candidate_wt, candidate_vr, candidate_cg, _ = _dual_measure(
-            venv_python, extraction_path, repeats=repeats, cwd=ws.repo_dir,
-            config=config, callgrind_enabled=(baseline_cg is not None),
+            venv_python,
+            extraction_path,
+            repeats=repeats,
+            cwd=ws.repo_dir,
+            config=config,
+            callgrind_enabled=(baseline_cg is not None),
         )
     except DriverError as e:
         # The LLM's edit broke the extraction (import error, syntax error,
@@ -186,7 +196,7 @@ def optimize_once(
             candidate_verify=VerifyResult(
                 passed=False,
                 error=f"candidate measurement failed (driver rc={e.returncode}): "
-                      f"{(e.stderr or e.stdout)[-500:]}",
+                f"{(e.stderr or e.stdout)[-500:]}",
             ),
             relative_improvement=None,
             relative_walltime_improvement=None,
@@ -232,7 +242,8 @@ def optimize_once(
         revert = git.git_revert_all(ws.repo_dir)
         reason = (
             f"{_metric_label(gate_metric)} improvement {rel_primary:.2%} is below threshold {threshold:.0%}"
-            if rel_primary is not None else "could not compute improvement"
+            if rel_primary is not None
+            else "could not compute improvement"
         )
         return OptimizationResult(
             accepted=False,
@@ -304,7 +315,10 @@ def _dual_measure(
     (used for candidate after baseline succeeded)"; False → skip entirely.
     """
     wt, vr = walltime.measure(
-        venv_python, extraction_path, repeats=repeats, cwd=cwd,
+        venv_python,
+        extraction_path,
+        repeats=repeats,
+        cwd=cwd,
     )
     if not vr.passed or callgrind_enabled is False:
         return wt, vr, None, None
@@ -312,7 +326,8 @@ def _dual_measure(
         return wt, vr, None, "macOS — Linux-only metric"
     try:
         cg, cg_vr = callgrind_mod.measure_callgrind(
-            venv_python, extraction_path,
+            venv_python,
+            extraction_path,
             valgrind_path=config.measurement.callgrind_path,
             autoscale_min_instructions=config.measurement.autoscale_min_instructions,
             cwd=cwd,
@@ -331,7 +346,9 @@ def _relative_walltime_improvement(
 ) -> float | None:
     if baseline is None or candidate is None or baseline.median_seconds <= 0:
         return None
-    return (baseline.median_seconds - candidate.median_seconds) / baseline.median_seconds
+    return (
+        baseline.median_seconds - candidate.median_seconds
+    ) / baseline.median_seconds
 
 
 def _relative_callgrind_improvement(
@@ -426,7 +443,7 @@ def _build_system_prompt(
         "median wallclock is reported as sanity."
         if primary_metric == "callgrind_instructions"
         else "Callgrind isn't available here (macOS or missing valgrind); "
-             "median wallclock with timeit.autorange best-of-K is the gate."
+        "median wallclock with timeit.autorange best-of-K is the gate."
     )
     base = _SYSTEM_PROMPT_TEMPLATE.format(
         threshold=threshold,
@@ -466,27 +483,35 @@ def _build_user_message(
         f"- stddev: {baseline_wt.stddev_seconds * 1e6:.2f} us",
     ]
     if baseline_cg is not None:
-        lines.extend([
-            "",
-            "Baseline Callgrind (per-call instructions, two-run subtraction):",
-            f"- instructions:  {baseline_cg.instructions:,}",
-            f"- autoscale N:   {baseline_cg.autoscale_iterations:,}",
-        ])
+        lines.extend(
+            [
+                "",
+                "Baseline Callgrind (per-call instructions, two-run subtraction):",
+                f"- instructions:  {baseline_cg.instructions:,}",
+                f"- autoscale N:   {baseline_cg.autoscale_iterations:,}",
+            ]
+        )
     elif callgrind_disabled_reason:
         lines.extend(["", f"(Callgrind disabled: {callgrind_disabled_reason})"])
     if focus_hint is not None:
-        lines.extend(["", "Focus suggested by the orchestrator (top of current profile):"])
+        lines.extend(
+            ["", "Focus suggested by the orchestrator (top of current profile):"]
+        )
         if focus_hint.qualname:
             lines.append(f"- qualname:    `{focus_hint.qualname}`")
         lines.append(f"- function:    `{focus_hint.funcname}`")
         lines.append(f"- file:        `{focus_hint.filename}`")
         lines.append(f"- line:        {focus_hint.lineno}")
         if focus_hint.cumtime_seconds is not None:
-            lines.append(f"- cumtime:     {focus_hint.cumtime_seconds * 1e6:.2f} us (cumulative across iterations)")
-    lines.extend([
-        "",
-        "Start by reading the focus function (use `read_source` with its "
-        "qualname, or `profile_cprofile` if you want to see the full ranking). "
-        "Propose ONE edit, sanity-check it with run_python, and end the turn.",
-    ])
+            lines.append(
+                f"- cumtime:     {focus_hint.cumtime_seconds * 1e6:.2f} us (cumulative across iterations)"
+            )
+    lines.extend(
+        [
+            "",
+            "Start by reading the focus function (use `read_source` with its "
+            "qualname, or `profile_cprofile` if you want to see the full ranking). "
+            "Propose ONE edit, sanity-check it with run_python, and end the turn.",
+        ]
+    )
     return "\n".join(lines)

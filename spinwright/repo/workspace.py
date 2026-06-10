@@ -9,9 +9,9 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class Workspace:
-    root: Path           # tmpdir root
-    repo_dir: Path       # clone destination (root / "repo")
-    venv_dir: Path       # root / ".venv"
+    root: Path  # tmpdir root
+    repo_dir: Path  # clone destination (root / "repo")
+    venv_dir: Path  # root / ".venv"
     branch: str
     base_sha: str
     keep: bool
@@ -97,8 +97,16 @@ def create(
 def commit(ws: Workspace, paths: list[Path], message: str) -> str:
     rels = [str(p.relative_to(ws.repo_dir)) for p in paths]
     _git(ws.repo_dir, "add", *rels)
-    _git(ws.repo_dir, "-c", "user.email=spinwright@localhost", "-c", "user.name=spinwright",
-         "commit", "-m", message)
+    _git(
+        ws.repo_dir,
+        "-c",
+        "user.email=spinwright@localhost",
+        "-c",
+        "user.name=spinwright",
+        "commit",
+        "-m",
+        message,
+    )
     return _git(ws.repo_dir, "rev-parse", "HEAD")
 
 
@@ -121,7 +129,9 @@ def reuse(root: Path) -> Workspace:
     if not (repo_dir / ".git").exists():
         raise FileNotFoundError(f"{root} is not a spinwright workspace (no repo/.git)")
     if not (venv_dir / "bin" / "python").exists():
-        raise FileNotFoundError(f"{root} has no .venv/bin/python — run `spinwright prep` first")
+        raise FileNotFoundError(
+            f"{root} has no .venv/bin/python — run `spinwright prep` first"
+        )
     branch = _git(repo_dir, "branch", "--show-current")
     base_sha = _git(repo_dir, "rev-parse", "HEAD")
     return Workspace(

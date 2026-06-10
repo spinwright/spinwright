@@ -17,7 +17,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_prep.add_argument("repo", help="Path or URL of the target repo.")
     p_prep.add_argument(
-        "--workspace", "-w",
+        "--workspace",
+        "-w",
         default=None,
         metavar="PATH",
         help=(
@@ -27,14 +28,17 @@ def build_parser() -> argparse.ArgumentParser:
             "and re-target the same workspace across runs."
         ),
     )
-    p_prep.add_argument("--ref", default=None, help="Git ref to check out (default: clone HEAD).")
+    p_prep.add_argument(
+        "--ref", default=None, help="Git ref to check out (default: clone HEAD)."
+    )
     p_prep.add_argument(
         "--extras",
         default="",
         help="Comma-separated optional extras to install (e.g. 'dev,test').",
     )
     p_prep.add_argument(
-        "--requirements", "-r",
+        "--requirements",
+        "-r",
         action="append",
         default=[],
         metavar="REPO_RELATIVE_PATH",
@@ -57,9 +61,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_candidates.add_argument(
-        "workspace", help="Path to a workspace built by `spinwright prep`.")
+        "workspace", help="Path to a workspace built by `spinwright prep`."
+    )
     p_candidates.add_argument(
-        "--test-path", action="append", default=[],
+        "--test-path",
+        action="append",
+        default=[],
         metavar="REPO_RELATIVE_PATH",
         help=(
             "Constrain discovery to a subset of the test tree. Passed as a "
@@ -67,18 +74,22 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_candidates.add_argument(
-        "--json", action="store_true",
+        "--json",
+        action="store_true",
         help="Emit a JSON document instead of the human-readable list.",
     )
     p_candidates.add_argument(
-        "--nodeids", action="store_true",
+        "--nodeids",
+        action="store_true",
         help=(
             "Print eligible nodeids only, one per line, sorted by duration "
             "desc. Pipes cleanly into other tools."
         ),
     )
     p_candidates.add_argument(
-        "--limit", type=int, default=50,
+        "--limit",
+        type=int,
+        default=50,
         help="Max entries per section in human output (default: 50).",
     )
     p_candidates.add_argument("--config", default=None, help="Path to spinwright.toml.")
@@ -92,23 +103,38 @@ def build_parser() -> argparse.ArgumentParser:
             "in via --test."
         ),
     )
-    p_extract.add_argument("workspace", help="Path to a workspace built by `spinwright prep`.")
     p_extract.add_argument(
-        "--test", required=True,
+        "workspace", help="Path to a workspace built by `spinwright prep`."
+    )
+    p_extract.add_argument(
+        "--test",
+        required=True,
         help="Pytest nodeid to extract (use `spinwright candidates` to find one).",
     )
     p_extract.add_argument("--config", default=None, help="Path to spinwright.toml.")
 
     p_measure = sub.add_parser("measure", help="Measure an extracted harness.")
-    p_measure.add_argument("workspace", help="Path to a workspace built by `spinwright prep`.")
-    p_measure.add_argument("--extraction", required=True,
-                           metavar="NAME",
-                           help="Extraction name (stem of the file under <repo>/<corpus_dir>/). NAME, NAME.py, or <corpus_dir>/NAME.py all work.")
+    p_measure.add_argument(
+        "workspace", help="Path to a workspace built by `spinwright prep`."
+    )
+    p_measure.add_argument(
+        "--extraction",
+        required=True,
+        metavar="NAME",
+        help="Extraction name (stem of the file under <repo>/<corpus_dir>/). NAME, NAME.py, or <corpus_dir>/NAME.py all work.",
+    )
     p_measure.add_argument("--config", default=None, help="Path to spinwright.toml.")
-    p_measure.add_argument("--repeats", type=int, default=None,
-                           help="Override config measurement.walltime_repeats.")
-    p_measure.add_argument("--json", action="store_true",
-                           help="Emit the result as a JSON object on stdout (for scripting).")
+    p_measure.add_argument(
+        "--repeats",
+        type=int,
+        default=None,
+        help="Override config measurement.walltime_repeats.",
+    )
+    p_measure.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the result as a JSON object on stdout (for scripting).",
+    )
 
     p_run = sub.add_parser(
         "run",
@@ -121,24 +147,35 @@ def build_parser() -> argparse.ArgumentParser:
             "breaks tests."
         ),
     )
-    p_run.add_argument("workspace", help="Path to a workspace built by `spinwright prep`.")
-    p_run.add_argument("--extraction", required=True, metavar="NAME",
-                       help="Extraction name; see `spinwright measure --help` for accepted forms.")
+    p_run.add_argument(
+        "workspace", help="Path to a workspace built by `spinwright prep`."
+    )
+    p_run.add_argument(
+        "--extraction",
+        required=True,
+        metavar="NAME",
+        help="Extraction name; see `spinwright measure --help` for accepted forms.",
+    )
     p_run.add_argument("--config", default=None, help="Path to spinwright.toml.")
     p_run.add_argument(
-        "--exclude-path", action="append", default=[],
+        "--exclude-path",
+        action="append",
+        default=[],
         help="Substring excluded from profile output (repeatable).",
     )
     p_run.add_argument(
-        "--skip-regression", action="store_true",
+        "--skip-regression",
+        action="store_true",
         help="Skip the full-suite regression check at the end of the loop.",
     )
     p_run.add_argument(
-        "--no-pr", action="store_true",
+        "--no-pr",
+        action="store_true",
         help="Skip the PR assembly + publish step (still writes the run directory).",
     )
     p_run.add_argument(
-        "--runs-dir", default="./spinwright-runs",
+        "--runs-dir",
+        default="./spinwright-runs",
         help="Directory for per-run artifact subdirectories.",
     )
 
@@ -152,9 +189,16 @@ def build_parser() -> argparse.ArgumentParser:
             "otherwise revert."
         ),
     )
-    p_optimize.add_argument("workspace", help="Path to a workspace built by `spinwright prep` or `spinwright extract`.")
-    p_optimize.add_argument("--extraction", required=True, metavar="NAME",
-                            help="Extraction name; see `spinwright measure --help` for accepted forms.")
+    p_optimize.add_argument(
+        "workspace",
+        help="Path to a workspace built by `spinwright prep` or `spinwright extract`.",
+    )
+    p_optimize.add_argument(
+        "--extraction",
+        required=True,
+        metavar="NAME",
+        help="Extraction name; see `spinwright measure --help` for accepted forms.",
+    )
     p_optimize.add_argument("--config", default=None, help="Path to spinwright.toml.")
     p_optimize.add_argument(
         "--exclude-path",
@@ -172,21 +216,27 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "prep":
         from spinwright.cli import prep
+
         return prep.run(args)
     if args.command == "candidates":
         from spinwright.cli import candidates
+
         return candidates.run(args)
     if args.command == "extract":
         from spinwright.cli import extract
+
         return extract.run(args)
     if args.command == "measure":
         from spinwright.cli import measure
+
         return measure.run(args)
     if args.command == "optimize":
         from spinwright.cli import optimize
+
         return optimize.run(args)
     if args.command == "run":
         from spinwright.cli import run
+
         return run.run(args)
 
     parser.error(f"unknown command: {args.command}")

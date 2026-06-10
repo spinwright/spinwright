@@ -60,7 +60,11 @@ def test_from_dict_full_round_trips():
             "classification": "claude-sonnet-4-6",
             "summarization": "claude-haiku-4-5-20251001",
         },
-        "pr": {"mode": "github_action", "base_branch": "master", "branch_prefix": "perf/"},
+        "pr": {
+            "mode": "github_action",
+            "base_branch": "master",
+            "branch_prefix": "perf/",
+        },
     }
     cfg = config.from_dict(data)
     assert cfg.target.ref == "v1"

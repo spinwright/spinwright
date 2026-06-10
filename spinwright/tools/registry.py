@@ -271,7 +271,10 @@ def build_optimization_tools(
             input_schema={
                 "type": "object",
                 "properties": {
-                    "iterations": {"type": "integer", "description": "How many run() calls to profile."},
+                    "iterations": {
+                        "type": "integer",
+                        "description": "How many run() calls to profile.",
+                    },
                     "exclude_paths": {
                         "type": "array",
                         "items": {"type": "string"},
@@ -279,7 +282,12 @@ def build_optimization_tools(
                     },
                     "sort_by": {
                         "type": "string",
-                        "enum": ["tottime", "cumtime", "tottime_per_call", "cumtime_per_call"],
+                        "enum": [
+                            "tottime",
+                            "cumtime",
+                            "tottime_per_call",
+                            "cumtime_per_call",
+                        ],
                     },
                     "limit": {"type": "integer"},
                 },

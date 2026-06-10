@@ -20,8 +20,8 @@ class VerifyResult:
 
 @dataclass(frozen=True)
 class CallgrindResult:
-    instructions: int                # per-call (already divided by autoscale N)
+    instructions: int  # per-call (already divided by autoscale N)
     autoscale_iterations: int
-    total_inst_at_n_plus_one: int   # raw inst count from the N+1 run
-    baseline_inst_at_one: int       # raw inst count from the 1-run baseline
-    output_path: str                # path to the N+1 callgrind.out file (for reference)
+    total_inst_at_n_plus_one: int  # raw inst count from the N+1 run
+    baseline_inst_at_one: int  # raw inst count from the 1-run baseline
+    output_path: str  # path to the N+1 callgrind.out file (for reference)

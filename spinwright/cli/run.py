@@ -33,7 +33,10 @@ _SHA_RE = re.compile(r"Source commit SHA:\s*`([^`]+)`")
 
 
 def _read_extraction_metadata(
-    extraction_path: Path, *, fallback_sha: str, corpus_dir: str,
+    extraction_path: Path,
+    *,
+    fallback_sha: str,
+    corpus_dir: str,
 ) -> pr_builder.ExtractionMetadata:
     """Parse the sibling NOTES.md written by ``spinwright extract``. Missing
     fields fall back to None / the workspace's base SHA."""
@@ -64,33 +67,50 @@ def _print_loop_summary(loop_result: loop_mod.LoopResult) -> None:
     print(f"  explored rejects:  {len(loop_result.explored)}")
     if loop_result.baseline is not None:
         b = loop_result.baseline
-        print(f"  baseline walltime: best={b.walltime.best_seconds*1e6:.2f} us  "
-              f"median={b.walltime.median_seconds*1e6:.2f} us")
+        print(
+            f"  baseline walltime: best={b.walltime.best_seconds * 1e6:.2f} us  "
+            f"median={b.walltime.median_seconds * 1e6:.2f} us"
+        )
         if b.callgrind is not None:
             print(f"  baseline callgrind: {b.callgrind.instructions:,} inst/call")
     if loop_result.final_walltime is not None:
         f = loop_result.final_walltime
-        print(f"  final walltime:    best={f.best_seconds*1e6:.2f} us  "
-              f"median={f.median_seconds*1e6:.2f} us")
+        print(
+            f"  final walltime:    best={f.best_seconds * 1e6:.2f} us  "
+            f"median={f.median_seconds * 1e6:.2f} us"
+        )
     if loop_result.final_callgrind is not None:
-        print(f"  final callgrind:   {loop_result.final_callgrind.instructions:,} inst/call")
+        print(
+            f"  final callgrind:   {loop_result.final_callgrind.instructions:,} inst/call"
+        )
     if loop_result.baseline and loop_result.final_walltime:
-        wt_delta = ((loop_result.baseline.walltime.median_seconds
-                     - loop_result.final_walltime.median_seconds)
-                    / loop_result.baseline.walltime.median_seconds)
+        wt_delta = (
+            loop_result.baseline.walltime.median_seconds
+            - loop_result.final_walltime.median_seconds
+        ) / loop_result.baseline.walltime.median_seconds
         print(f"  total walltime delta: {wt_delta:+.2%}")
-    if loop_result.baseline and loop_result.baseline.callgrind and loop_result.final_callgrind:
-        cg_delta = ((loop_result.baseline.callgrind.instructions
-                     - loop_result.final_callgrind.instructions)
-                    / loop_result.baseline.callgrind.instructions)
+    if (
+        loop_result.baseline
+        and loop_result.baseline.callgrind
+        and loop_result.final_callgrind
+    ):
+        cg_delta = (
+            loop_result.baseline.callgrind.instructions
+            - loop_result.final_callgrind.instructions
+        ) / loop_result.baseline.callgrind.instructions
         print(f"  total callgrind delta: {cg_delta:+.2%}")
 
     for i, it in enumerate(loop_result.iterations):
         label = "ACCEPT" if it.accepted else "reject"
-        delta = (f"{it.relative_improvement:+.2%}"
-                 if it.relative_improvement is not None else "n/a")
-        reason = (it.rejection_reason or "").splitlines()[0] if it.rejection_reason else ""
-        print(f"  [{i+1}] {label}  primary={delta}  reason={reason}")
+        delta = (
+            f"{it.relative_improvement:+.2%}"
+            if it.relative_improvement is not None
+            else "n/a"
+        )
+        reason = (
+            (it.rejection_reason or "").splitlines()[0] if it.rejection_reason else ""
+        )
+        print(f"  [{i + 1}] {label}  primary={delta}  reason={reason}")
 
 
 def _print_regression_summary(reg: regression_mod.RegressionResult) -> None:
@@ -160,7 +180,9 @@ def run(
         )
         _print_regression_summary(reg)
 
-    surviving_patches = loop_result.accepted_count - (len(reg.dropped_commits) if reg else 0)
+    surviving_patches = loop_result.accepted_count - (
+        len(reg.dropped_commits) if reg else 0
+    )
 
     # PR assembly + publish
     run_id = run_log.make_run_id()
@@ -168,10 +190,12 @@ def run(
 
     pr_draft = None
     publish_result = None
-    run_dir = runs_root / run_id      # Default if no_pr path below doesn't set it.
+    run_dir = runs_root / run_id  # Default if no_pr path below doesn't set it.
     if not args.no_pr:
         meta = _read_extraction_metadata(
-            extraction, fallback_sha=ws.base_sha, corpus_dir=cfg.corpus.dir,
+            extraction,
+            fallback_sha=ws.base_sha,
+            corpus_dir=cfg.corpus.dir,
         )
         pr_draft = pr_builder.build_pr(
             loop_result=loop_result,
@@ -196,11 +220,16 @@ def run(
         )
         if surviving_patches > 0:
             publish_result = pr_publish.publish(
-                ws=ws, pr_draft=pr_draft, pr_config=cfg.pr, run_dir=run_dir,
+                ws=ws,
+                pr_draft=pr_draft,
+                pr_config=cfg.pr,
+                run_dir=run_dir,
             )
             _print_publish_summary(publish_result, run_dir)
         else:
-            print(f"\nNo surviving patches — PR.md still written to: {run_dir / 'PR.md'}")
+            print(
+                f"\nNo surviving patches — PR.md still written to: {run_dir / 'PR.md'}"
+            )
     else:
         # Still write a minimal run directory for the summary, no PR.
         run_log.write_run_directory(

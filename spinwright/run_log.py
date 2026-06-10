@@ -71,7 +71,9 @@ def write_run_directory(
     }
     if extra_metadata:
         summary["metadata"] = extra_metadata
-    (run_dir / "run_summary.json").write_text(json.dumps(summary, indent=2, default=str))
+    (run_dir / "run_summary.json").write_text(
+        json.dumps(summary, indent=2, default=str)
+    )
 
     return run_dir
 
