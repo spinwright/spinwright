@@ -161,6 +161,9 @@ jobs:
         id: run
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Stream Python stdout/stderr unbuffered so loop/agent progress shows
+          # up live in the step log instead of all at once when the step ends.
+          PYTHONUNBUFFERED: "1"
         run: |
           RUN_ARGS=(
             "${{ steps.prep.outputs.ws }}"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from spinwright.config import Config
 from spinwright.llm.client import ClientProtocol
@@ -66,6 +67,7 @@ def run_loop(
     client: ClientProtocol,
     model: str | None = None,
     extra_excludes: tuple[str, ...] = (),
+    on_progress: Callable[[str], None] | None = None,
 ) -> LoopResult:
     """Iterate optimize_once until budgets exhaust or no more candidates.
 
@@ -96,10 +98,12 @@ def run_loop(
       - The candidate profile fails (e.g., user-edit broke import) — captured
          as ``stop_reason="infrastructure_error"``.
     """
+    emit = on_progress or (lambda _msg: None)
     start_monotonic = time.monotonic()
     venv_python = venv_mod.python_executable(ws)
     repo_dir_resolved = ws.repo_dir.resolve()
 
+    emit("loop: measuring initial baseline…")
     base_wt, base_vr, base_cg, cg_disabled = _dual_measure(
         venv_python,
         extraction_path,
@@ -141,14 +145,24 @@ def run_loop(
 
     for i in range(max_iters):
         if token_budget > 0 and spent_tokens >= token_budget:
+            emit(
+                f"loop: stopping — token budget reached "
+                f"({spent_tokens:,} / {token_budget:,})"
+            )
             stop_reason = "token_budget_exhausted"
             break
         if (
             wall_clock_budget_seconds > 0
             and time.monotonic() - start_monotonic >= wall_clock_budget_seconds
         ):
+            emit(
+                f"loop: stopping — wall-clock budget reached "
+                f"({time.monotonic() - start_monotonic:.0f}s / "
+                f"{wall_clock_budget_seconds:.0f}s)"
+            )
             stop_reason = "wall_clock_exhausted"
             break
+        emit(f"iteration {i + 1}/{max_iters}: profiling hotspots…")
         try:
             prof = cprofile.profile_cprofile(
                 venv_python,
@@ -157,6 +171,7 @@ def run_loop(
                 cwd=ws.repo_dir,
             )
         except DriverError as e:
+            emit(f"iteration {i + 1}/{max_iters}: profiling failed — {e}")
             stop_reason = "infrastructure_error"
             iterations.append(
                 _failed_iteration(
@@ -175,9 +190,17 @@ def run_loop(
             corpus_dir=config.corpus.dir,
         )
         if focus is None:
+            emit(f"iteration {i + 1}/{max_iters}: no remaining bottlenecks")
             stop_reason = "no_remaining_bottlenecks"
             break
 
+        focus_label = focus.qualname or focus.funcname
+        cumtime_us = (
+            f" (cumtime {focus.cumtime_seconds * 1e6:.0f}us)"
+            if focus.cumtime_seconds is not None
+            else ""
+        )
+        emit(f"iteration {i + 1}/{max_iters}: focus → {focus_label}{cumtime_us}")
         result = optimize_once(
             ws=ws,
             extraction_path=extraction_path,
@@ -186,6 +209,7 @@ def run_loop(
             model=model,
             extra_excludes=extra_excludes,
             focus_hint=focus,
+            on_progress=on_progress,
         )
         iterations.append(result)
         spent_tokens += _conversation_tokens(result.conversation)
@@ -196,8 +220,28 @@ def run_loop(
                 current_wt = result.candidate_walltime
             if result.candidate_callgrind is not None:
                 current_cg = result.candidate_callgrind
+            delta = (
+                f"{result.relative_improvement:+.2%}"
+                if result.relative_improvement is not None
+                else "n/a"
+            )
+            emit(
+                f"iteration {i + 1}/{max_iters}: ACCEPT (primary {delta}); "
+                f"spent {spent_tokens:,} tokens, "
+                f"{time.monotonic() - start_monotonic:.0f}s elapsed"
+            )
         else:
             explored.append(focus.explored_key)
+            reason = (
+                (result.rejection_reason or "").splitlines()[0]
+                if result.rejection_reason
+                else "no improvement"
+            )
+            emit(
+                f"iteration {i + 1}/{max_iters}: reject — {reason}; "
+                f"spent {spent_tokens:,} tokens, "
+                f"{time.monotonic() - start_monotonic:.0f}s elapsed"
+            )
 
     return LoopResult(
         success=True,

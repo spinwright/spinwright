@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from spinwright import platform as platform_mod
 from spinwright.config import Config
@@ -70,6 +71,7 @@ def optimize_once(
     model: str | None = None,
     extra_excludes: tuple[str, ...] = (),
     focus_hint: FocusHint | None = None,
+    on_progress: Callable[[str], None] | None = None,
 ) -> OptimizationResult:
     """Run one round of the optimization agent against ``extraction_path``.
 
@@ -84,10 +86,12 @@ def optimize_once(
     The baseline measurement is always taken before the LLM is invoked so
     the LLM's view of "what counts as improvement" matches the orchestrator's.
     """
+    emit = on_progress or (lambda _msg: None)
     venv_python = venv_mod.python_executable(ws)
     threshold = config.measurement.improvement_threshold
     repeats = config.measurement.walltime_repeats
 
+    emit("measuring baseline (walltime + callgrind)…")
     baseline_wt, baseline_vr, baseline_cg, callgrind_disabled_reason = _dual_measure(
         venv_python,
         extraction_path,
@@ -141,6 +145,10 @@ def optimize_once(
     )
     chosen_model = model or config.models.reasoning
 
+    emit(
+        f"running optimization agent on {chosen_model} "
+        f"(up to {config.budget.max_extraction_turns} turns)…"
+    )
     conversation = run_conversation(
         client,
         model=chosen_model,
@@ -148,6 +156,12 @@ def optimize_once(
         initial_user_message=user_message,
         tools=tools,
         max_turns=config.budget.max_extraction_turns,  # reuse extraction turn cap for now
+        on_progress=on_progress,
+    )
+    emit(
+        f"agent finished: {conversation.stop_reason} "
+        f"after {len(conversation.turns)} turns, "
+        f"{conversation.output_tokens} output tokens"
     )
 
     diff = git.git_diff(ws.repo_dir)
@@ -173,6 +187,7 @@ def optimize_once(
             extraction_path=extraction_path,
         )
 
+    emit("measuring candidate (walltime + callgrind)…")
     try:
         candidate_wt, candidate_vr, candidate_cg, _ = _dual_measure(
             venv_python,

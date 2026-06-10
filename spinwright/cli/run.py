@@ -25,6 +25,13 @@ def _load_config(path: str | None) -> cfg_mod.Config:
     return cfg_mod.default()
 
 
+def _progress(msg: str) -> None:
+    """Stream live loop/agent progress to stderr. ``flush=True`` so messages
+    appear in real time in CI logs even when stdout/stderr is a pipe (the
+    GitHub Action pipes ``spinwright run`` through ``tee``)."""
+    print(f"[spinwright] {msg}", file=sys.stderr, flush=True)
+
+
 # Extraction resolution moved to cli._extraction_arg (shared with measure/optimize).
 
 
@@ -162,6 +169,7 @@ def run(
         config=cfg,
         client=client,
         extra_excludes=tuple(args.exclude_path),
+        on_progress=_progress,
     )
     _print_loop_summary(loop_result)
 

@@ -74,6 +74,7 @@ def run_conversation(
     max_turns: int = 30,
     max_tokens: int = DEFAULT_MAX_TOKENS,
     cache_static_prefix: bool = True,
+    on_progress: Callable[[str], None] | None = None,
 ) -> ConversationResult:
     """Drive a tool-use conversation to completion.
 
@@ -91,7 +92,13 @@ def run_conversation(
     both tools and system in one breakpoint — that's what ``cache_static_prefix``
     does. We don't add a separate marker on tools because it would create a
     redundant second breakpoint without changing what gets cached.
+
+    ``on_progress``, if given, is called with a short human-readable string
+    after each model turn — used by the CLI to stream agent activity (turn
+    number, stop reason, tool calls, token usage) so a long-running conversation
+    isn't a silent black box in CI logs. It must not raise.
     """
+    emit = on_progress or _noop_progress
     handlers = {t.name: t.handler for t in tools}
     system_payload = _build_system(system, cache=cache_static_prefix)
     tools_payload = _build_tools(tools)
@@ -107,7 +114,7 @@ def run_conversation(
 
     result = ConversationResult(stop_reason="unknown", turns=turns, final_text="")
 
-    for _ in range(max_turns):
+    for turn_no in range(1, max_turns + 1):
         response = client.messages.create(
             model=model,
             max_tokens=max_tokens,
@@ -129,6 +136,11 @@ def run_conversation(
         _accumulate_usage(result, usage_dict)
         result.final_text = _extract_text(assistant_content)
         result.stop_reason = response.stop_reason or "unknown"
+        emit(
+            _turn_progress(
+                turn_no, max_turns, response.stop_reason, assistant_content, usage_dict
+            )
+        )
 
         if response.stop_reason == "end_turn":
             break
@@ -169,6 +181,30 @@ def run_conversation(
 # ----------------------------------------------------------------------------
 # Internals
 # ----------------------------------------------------------------------------
+
+
+def _noop_progress(_msg: str) -> None:
+    pass
+
+
+def _turn_progress(
+    turn_no: int,
+    max_turns: int,
+    stop_reason: str | None,
+    content: list[dict],
+    usage: dict,
+) -> str:
+    """One-line summary of an agent turn for progress streaming."""
+    tool_names = [
+        b.get("name", "?") for b in content if b.get("type") == "tool_use"
+    ]
+    parts = [f"turn {turn_no}/{max_turns}: {stop_reason or 'unknown'}"]
+    if tool_names:
+        parts.append("→ " + ", ".join(tool_names))
+    tin = usage.get("input_tokens", 0) or 0
+    tout = usage.get("output_tokens", 0) or 0
+    parts.append(f"(in={tin} out={tout})")
+    return " ".join(parts)
 
 
 def _build_system(system: str, *, cache: bool) -> list[dict]:
