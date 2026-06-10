@@ -192,7 +192,11 @@ def test_optimize_cli_reports_rejection_with_diff(tmp_path: Path, capsys):
     target_file = str((ws.repo_dir / "target_pkg" / "__init__.py").resolve())
 
     client = FakeClient()
-    # LLM makes a no-op edit that's clearly below threshold (just renames).
+    # LLM makes an edit that DOUBLES the sleep — guaranteed below threshold
+    # regardless of measurement noise. A cosmetic-only edit (e.g. a comment)
+    # turned out to be too noise-sensitive on macOS CI runners where two
+    # back-to-back timeit.autorange measurements can drift 20%+ purely by
+    # chance, occasionally pushing a no-op edit over the gate.
     client.messages.queue(
         FakeMessage(
             content=[
@@ -201,14 +205,14 @@ def test_optimize_cli_reports_rejection_with_diff(tmp_path: Path, capsys):
                     name="edit_file",
                     input={
                         "path": target_file,
-                        "old_string": "def sum_squares(n):",
-                        "new_string": "def sum_squares(n):  # tweaked",
+                        "old_string": "time.sleep(0.005)",
+                        "new_string": "time.sleep(0.010)",
                     },
                 )
             ],
             stop_reason="tool_use",
         ),
-        FakeMessage(content=[FakeText(text="cosmetic")], stop_reason="end_turn"),
+        FakeMessage(content=[FakeText(text="oops, slower")], stop_reason="end_turn"),
     )
 
     args = argparse.Namespace(
