@@ -8,8 +8,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 from spinwright import config as cfg_mod
 from spinwright.extraction import extract
 from spinwright.repo.workspace import Workspace

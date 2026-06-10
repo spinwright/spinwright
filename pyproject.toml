@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spinwright"
+version = "0.1.0"
+description = "LLM-driven Python performance-optimization agent."
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Christopher Ariza" }]
+dependencies = [
+    "anthropic==0.109.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.0.3",
+    "ruff==0.15.16",
+    "build==1.5.0",
+]
+
+[project.scripts]
+spinwright = "spinwright.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["spinwright*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

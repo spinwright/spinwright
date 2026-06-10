@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 import sys
 import textwrap
 from pathlib import Path
@@ -86,7 +85,7 @@ def test_get_test_source_raises_for_missing_test(tmp_path: Path):
 
 
 def test_get_test_source_raises_for_missing_nodeid_component(tmp_path: Path):
-    p = _write_tests_file(tmp_path, "def test_x(): pass\n")
+    _ = _write_tests_file(tmp_path, "def test_x(): pass\n")
     with pytest.raises(ValueError):
         source.get_test_source(tmp_path, "test_mod.py")
 

@@ -3,9 +3,6 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-
-from pathlib import Path
-
 from spinwright import config as cfg_mod
 from spinwright.repo import venv, workspace
 

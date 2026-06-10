@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -385,7 +384,6 @@ def _bottleneck_section(
     index: int, it: OptimizationResult, *, total_metric: str
 ) -> list[str]:
     lines: list[str] = []
-    funcname = ""
     file_hint = ""
     if it.conversation is not None:
         # Pull funcname from the focus hint embedded in the user message;

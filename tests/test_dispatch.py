@@ -210,7 +210,7 @@ def test_unknown_tool_name_returns_is_error():
         ),
         FakeMessage(content=[FakeText(text="oh well")], stop_reason="end_turn"),
     )
-    result = run_conversation(
+    _ = run_conversation(
         client,
         model="claude-test",
         system="sys",

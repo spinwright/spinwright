@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from spinwright import config as cfg_mod
-from spinwright.optimization import loop, optimize
+from spinwright.optimization import loop
 from spinwright.profiling.cprofile import CProfileResult, ProfileEntry
 from spinwright.repo.workspace import Workspace
 
@@ -394,7 +394,7 @@ def test_loop_accepts_two_separate_focus_optimizations(tmp_path: Path):
     )
     # init + 2 spinwright commits
     assert len(log) >= 3
-    spinwright_commits = [l for l in log if "spinwright: optimize" in l]
+    spinwright_commits = [line for line in log if "spinwright: optimize" in line]
     assert len(spinwright_commits) == 2
 
 

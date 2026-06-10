@@ -60,8 +60,8 @@ jobs:
         python:
             - {version: '3.14'}
         checks:
-            - {name: 'Quality', command: 'nox -s quality'}
-            - {name: 'Package', command: 'nox -s build'}
+            - {name: 'Quality', command: 'ruff check ;ruff format --check'}
+            - {name: 'Package', command: 'python -m build'}
 
     runs-on: ${{ matrix.os.name }}
 
