@@ -414,9 +414,9 @@ Tools available:
 
 Rules:
 - Pure-Python edits only. No new C extensions, no Cython, no Rust. Swapping
-  a pure-Python implementation for an already-available stdlib/NumPy/SciPy
+  a pure-Python implementation for an already-available stdlib or NumPy
   equivalent IS allowed.
-- Do not modify the test's public API or the extraction's `setup`/`run`/
+- Do not modify the test's public API or the extraction's `setup` / `run` /
   `verify` signatures.
 - Do not weaken or change `verify()`. If your edit makes verify fail, you
   need a different edit, not a different verify.

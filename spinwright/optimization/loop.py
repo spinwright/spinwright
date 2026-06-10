@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from spinwright.config import Config
 from spinwright.llm.client import ClientProtocol
+from spinwright.llm.dispatch import ConversationResult
 from spinwright.measurement.runner import DriverError
 from spinwright.measurement.types import CallgrindResult, VerifyResult, WalltimeResult
 from spinwright.optimization.optimize import (
@@ -42,6 +44,8 @@ class LoopResult:
     final_callgrind: CallgrindResult | None
     explored: list[str]
     stop_reason: str
+    spent_tokens: int = 0
+    elapsed_seconds: float = 0.0
     failure_reason: str | None = None
 
     @property
@@ -77,9 +81,22 @@ def run_loop(
     Stops when:
       - No candidate survives the explored filter.
       - ``budget.max_patches_proposed`` iterations have been attempted.
+      - Cumulative token usage reaches ``budget.tokens_per_run`` — checked
+         before each iteration so an in-flight conversation is never cut off,
+         captured as ``stop_reason="token_budget_exhausted"``. A non-positive
+         ``tokens_per_run`` disables the check (unlimited).
+      - Wall-clock elapsed (measured from the start of this call, baseline
+         included) reaches ``budget.max_wall_clock_minutes`` — checked before
+         each iteration, so a new iteration never starts past the deadline but
+         an in-flight one runs to completion (actual stop may overshoot by one
+         iteration). Captured as ``stop_reason="wall_clock_exhausted"``. A
+         non-positive ``max_wall_clock_minutes`` disables the check. Whatever
+         baseline and accepted patches exist at that point are preserved in the
+         returned ``LoopResult``.
       - The candidate profile fails (e.g., user-edit broke import) — captured
          as ``stop_reason="infrastructure_error"``.
     """
+    start_monotonic = time.monotonic()
     venv_python = venv_mod.python_executable(ws)
     repo_dir_resolved = ws.repo_dir.resolve()
 
@@ -107,6 +124,7 @@ def run_loop(
             final_callgrind=base_cg,
             explored=[],
             stop_reason="baseline_verify_failed",
+            elapsed_seconds=time.monotonic() - start_monotonic,
             failure_reason="baseline verify() failed before any iteration ran",
         )
 
@@ -116,9 +134,21 @@ def run_loop(
     current_wt = base_wt
     current_cg = base_cg
     max_iters = config.budget.max_patches_proposed
+    token_budget = config.budget.tokens_per_run
+    wall_clock_budget_seconds = config.budget.max_wall_clock_minutes * 60
+    spent_tokens = 0
     stop_reason = "max_iterations"
 
     for i in range(max_iters):
+        if token_budget > 0 and spent_tokens >= token_budget:
+            stop_reason = "token_budget_exhausted"
+            break
+        if (
+            wall_clock_budget_seconds > 0
+            and time.monotonic() - start_monotonic >= wall_clock_budget_seconds
+        ):
+            stop_reason = "wall_clock_exhausted"
+            break
         try:
             prof = cprofile.profile_cprofile(
                 venv_python,
@@ -158,6 +188,7 @@ def run_loop(
             focus_hint=focus,
         )
         iterations.append(result)
+        spent_tokens += _conversation_tokens(result.conversation)
 
         if result.accepted:
             accepted_indices.append(i)
@@ -178,6 +209,8 @@ def run_loop(
         final_callgrind=current_cg,
         explored=explored,
         stop_reason=stop_reason,
+        spent_tokens=spent_tokens,
+        elapsed_seconds=time.monotonic() - start_monotonic,
     )
 
 
@@ -242,6 +275,19 @@ def _select_focus(
             explored_key=key,
         )
     return None
+
+
+def _conversation_tokens(conv: ConversationResult | None) -> int:
+    """Billable non-cache tokens an iteration's conversation used, counted
+    against ``budget.tokens_per_run``. Sums fresh ``input_tokens`` (Anthropic
+    reports cache hits separately under cache_read, so this already excludes
+    them) and ``output_tokens``; cache creation/read tokens are deliberately
+    omitted so the budget tracks full-price throughput. Returns 0 when the
+    iteration ran no conversation (e.g. baseline verify failed before the LLM
+    was invoked)."""
+    if conv is None:
+        return 0
+    return conv.input_tokens + conv.output_tokens
 
 
 def _explored_key(filename: str, lineno: int, funcname: str) -> str:

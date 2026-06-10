@@ -312,14 +312,25 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
     ), ext_path
 
 
-def _cfg(threshold=0.20, repeats=3, max_iters=3) -> cfg_mod.Config:
+def _cfg(
+    threshold=0.20,
+    repeats=3,
+    max_iters=3,
+    tokens_per_run=None,
+    wall_clock_minutes=None,
+) -> cfg_mod.Config:
+    budget: dict = {"max_patches_proposed": max_iters, "max_extraction_turns": 4}
+    if tokens_per_run is not None:
+        budget["tokens_per_run"] = tokens_per_run
+    if wall_clock_minutes is not None:
+        budget["max_wall_clock_minutes"] = wall_clock_minutes
     return cfg_mod.from_dict(
         {
             "measurement": {
                 "improvement_threshold": threshold,
                 "walltime_repeats": repeats,
             },
-            "budget": {"max_patches_proposed": max_iters, "max_extraction_turns": 4},
+            "budget": budget,
         }
     )
 
@@ -396,6 +407,94 @@ def test_loop_accepts_two_separate_focus_optimizations(tmp_path: Path):
     assert len(log) >= 3
     spinwright_commits = [line for line in log if "spinwright: optimize" in line]
     assert len(spinwright_commits) == 2
+
+
+def test_loop_stops_on_token_budget(tmp_path: Path):
+    """Cumulative token usage reaching budget.tokens_per_run halts the loop
+    before the next iteration starts, even with patch budget remaining."""
+    ws, ext_path = _make_workspace(tmp_path)
+    cfg = _cfg(max_iters=5, tokens_per_run=1000)
+
+    client = FakeClient()
+    # iter 1: LLM makes no edit but burns 1200 tokens (> 1000 budget). Only one
+    # response is queued — if the loop tried a second iteration, FakeMessages
+    # would raise "no fake response queued", so reaching the assertions proves
+    # iteration 2 never started.
+    client.messages.queue(
+        FakeMessage(
+            content=[FakeText(text="no change")],
+            stop_reason="end_turn",
+            usage=FakeUsage(input_tokens=600, output_tokens=600),
+        ),
+    )
+
+    result = loop.run_loop(ws=ws, extraction_path=ext_path, config=cfg, client=client)
+    assert result.success
+    assert result.stop_reason == "token_budget_exhausted"
+    assert len(result.iterations) == 1
+    assert result.spent_tokens == 1200
+
+
+def test_loop_stops_on_wall_clock(tmp_path: Path):
+    """Elapsed wall-clock past budget.max_wall_clock_minutes halts the loop
+    before the next iteration starts, and the patch accepted by the iteration
+    that did run is preserved in the result."""
+    ws, ext_path = _make_workspace(tmp_path)
+    cfg = _cfg(max_iters=5, wall_clock_minutes=1)  # 60s deadline
+    target_file = str((ws.repo_dir / "target_pkg" / "__init__.py").resolve())
+
+    # Scripted monotonic clock (run_loop is the only in-module caller): start=0,
+    # iter-0 check=0 (< 60s -> runs), iter-1 check=100 (>= 60s -> stop), and the
+    # clamp covers the final elapsed read. Patch only loop's `time` reference so
+    # no other module's clock is disturbed.
+    ticks = iter([0.0, 0.0, 100.0])
+    last = [0.0]
+
+    class _FakeTime:
+        @staticmethod
+        def monotonic():
+            try:
+                last[0] = next(ticks)
+            except StopIteration:
+                pass
+            return last[0]
+
+    client = FakeClient()
+    # iter 0: accept an edit (kill slow_a's sleep) so there's a real result to keep.
+    client.messages.queue(
+        FakeMessage(
+            content=[
+                FakeToolUse(
+                    id="tu_wc",
+                    name="edit_file",
+                    input={
+                        "path": target_file,
+                        "old_string": "def slow_a(n):\n    time.sleep(0.003)\n    ",
+                        "new_string": "def slow_a(n):\n    ",
+                    },
+                )
+            ],
+            stop_reason="tool_use",
+        ),
+        FakeMessage(content=[FakeText(text="killed slow_a")], stop_reason="end_turn"),
+    )
+    # No iter-1 responses queued: if the loop tried a second iteration the fake
+    # client would raise, so reaching the assertions proves it stopped.
+
+    real_time = loop.time
+    loop.time = _FakeTime
+    try:
+        result = loop.run_loop(
+            ws=ws, extraction_path=ext_path, config=cfg, client=client
+        )
+    finally:
+        loop.time = real_time
+
+    assert result.success
+    assert result.stop_reason == "wall_clock_exhausted"
+    assert len(result.iterations) == 1
+    assert result.accepted_count == 1
+    assert result.elapsed_seconds == 100.0
 
 
 def test_loop_records_explored_for_rejections(tmp_path: Path):

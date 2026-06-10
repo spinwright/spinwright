@@ -47,9 +47,8 @@ class MeasurementConfig:
 @dataclass(frozen=True)
 class BudgetConfig:
     tokens_per_run: int = 2_000_000
-    max_patches_proposed: int = 4  # was 10
-    max_descents_per_focus: int = 4
-    max_wall_clock_minutes: int = 60
+    max_patches_proposed: int = 1  # was 10
+    max_wall_clock_minutes: int = 30
     max_extraction_turns: int = 30
 
 

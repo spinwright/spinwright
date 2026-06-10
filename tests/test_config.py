@@ -19,7 +19,6 @@ def test_default_modification_knobs_present():
     cfg = config.default()
     assert cfg.measurement.autoscale_min_instructions == 1_000_000_000
     assert cfg.budget.max_patches_proposed == 10
-    assert cfg.budget.max_descents_per_focus == 4
     assert cfg.eligibility.allow_pure_conftest_imports is False
 
 
@@ -51,7 +50,6 @@ def test_from_dict_full_round_trips():
         "budget": {
             "tokens_per_run": 1_000_000,
             "max_patches_proposed": 5,
-            "max_descents_per_focus": 2,
             "max_wall_clock_minutes": 30,
             "max_extraction_turns": 15,
         },

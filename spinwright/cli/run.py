@@ -65,6 +65,8 @@ def _print_loop_summary(loop_result: loop_mod.LoopResult) -> None:
     print(f"  iterations:        {len(loop_result.iterations)}")
     print(f"  accepted patches:  {loop_result.accepted_count}")
     print(f"  explored rejects:  {len(loop_result.explored)}")
+    print(f"  tokens spent:      {loop_result.spent_tokens:,}")
+    print(f"  wall-clock:        {loop_result.elapsed_seconds:.1f}s")
     if loop_result.baseline is not None:
         b = loop_result.baseline
         print(

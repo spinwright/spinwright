@@ -16,7 +16,7 @@ from spinwright.llm.models import DEFAULT_MAX_TOKENS
 
 @dataclass(frozen=True)
 class ToolDefinition:
-    """One tool exposed to the LLM.
+    """One tool exposed to the LLM. Based on custom tool definitions in Anthropic's Messages API.
 
     ``input_schema`` is a JSON schema describing the tool's input arguments.
     ``handler`` receives the parsed input dict and returns any JSON-serializable
