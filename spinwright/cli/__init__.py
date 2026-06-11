@@ -158,12 +158,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_run.add_argument("--config", default=None, help="Path to spinwright.toml.")
     p_run.add_argument(
-        "--exclude-path",
-        action="append",
-        default=[],
-        help="Substring excluded from profile output (repeatable).",
-    )
-    p_run.add_argument(
         "--skip-regression",
         action="store_true",
         help="Skip the full-suite regression check at the end of the loop.",
@@ -200,12 +194,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Extraction name; see `spinwright measure --help` for accepted forms.",
     )
     p_optimize.add_argument("--config", default=None, help="Path to spinwright.toml.")
-    p_optimize.add_argument(
-        "--exclude-path",
-        action="append",
-        default=[],
-        help="Substring excluded from profile output (repeatable).",
-    )
 
     return parser
 

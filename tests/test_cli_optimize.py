@@ -176,7 +176,6 @@ def test_optimize_cli_accepts_a_real_improvement(tmp_path: Path, capsys):
         workspace=str(ws.root),
         extraction=str(ext_path),
         config=None,
-        exclude_path=[],
     )
     rc = cli_optimize.run(args, client_factory=lambda: client)
     out = capsys.readouterr().out
@@ -219,7 +218,6 @@ def test_optimize_cli_reports_rejection_with_diff(tmp_path: Path, capsys):
         workspace=str(ws.root),
         extraction=str(ext_path),
         config=None,
-        exclude_path=[],
     )
     rc = cli_optimize.run(args, client_factory=lambda: client)
     out = capsys.readouterr().out
@@ -239,7 +237,6 @@ def test_optimize_cli_handles_missing_api_key(tmp_path: Path, capsys):
         workspace=str(ws.root),
         extraction=str(ext_path),
         config=None,
-        exclude_path=[],
     )
     rc = cli_optimize.run(args, client_factory=boom)
     assert rc == 2

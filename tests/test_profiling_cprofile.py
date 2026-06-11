@@ -66,6 +66,54 @@ def test_top_entries_rejects_unknown_sort_key(tmp_path: Path):
         cprofile.top_entries(result, by="bogus", limit=5)
 
 
+def test_include_prefix_drops_entries_outside_prefix(tmp_path: Path):
+    """`include_prefix` is a positive filter: only entries whose filename
+    starts with the prefix survive. This is how the registry layer scopes
+    profile output to the target repo without the LLM having to think about
+    excluding stdlib/numpy noise."""
+    ext = _write_extraction(tmp_path, _EXTRACTION_TEMPLATE)
+    # Without include_prefix, both user code and any timer/io noise come back.
+    unfiltered = cprofile.profile_cprofile(PY, ext, iterations=200)
+    # Setting include_prefix to /var/non-existent drops *everything* — confirms
+    # the filter is active and exclusive (not just "supplements" the result).
+    nothing = cprofile.profile_cprofile(
+        PY,
+        ext,
+        iterations=200,
+        include_prefix="/var/non-existent-prefix",
+    )
+    assert nothing.entries == ()
+    # Setting include_prefix to tmp_path keeps only the extraction's own entries.
+    repo_only = cprofile.profile_cprofile(
+        PY,
+        ext,
+        iterations=200,
+        include_prefix=str(tmp_path),
+    )
+    funcs = {e.funcname for e in repo_only.entries}
+    assert "busy" in funcs and "run" in funcs
+    # All surviving filenames start with tmp_path
+    assert all(e.filename.startswith(str(tmp_path)) for e in repo_only.entries)
+    # And the filtered set is a subset of the unfiltered.
+    assert len(repo_only.entries) <= len(unfiltered.entries)
+
+
+def test_include_prefix_and_exclude_compose(tmp_path: Path):
+    """Include filter narrows; excludes refine within. Common case: scope to
+    repo via include, drop the test harness dir within via excludes."""
+    ext = _write_extraction(tmp_path, _EXTRACTION_TEMPLATE)
+    result = cprofile.profile_cprofile(
+        PY,
+        ext,
+        iterations=200,
+        include_prefix=str(tmp_path),
+        exclude_paths=(str(ext),),  # drop the extraction file itself
+    )
+    funcs = {e.funcname for e in result.entries}
+    # The extraction's own functions (`run`, `busy`) live in `ext` — excluded.
+    assert "run" not in funcs and "busy" not in funcs
+
+
 def test_exclude_paths_drops_matching_entries(tmp_path: Path):
     ext = _write_extraction(tmp_path, _EXTRACTION_TEMPLATE)
     unfiltered = cprofile.profile_cprofile(PY, ext, iterations=200)

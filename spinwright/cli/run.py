@@ -168,7 +168,6 @@ def run(
         extraction_path=extraction,
         config=cfg,
         client=client,
-        extra_excludes=tuple(args.exclude_path),
         on_progress=_progress,
     )
     _print_loop_summary(loop_result)

@@ -69,7 +69,6 @@ def optimize_once(
     config: Config,
     client: ClientProtocol,
     model: str | None = None,
-    extra_excludes: tuple[str, ...] = (),
     focus_hint: FocusHint | None = None,
     on_progress: Callable[[str], None] | None = None,
 ) -> OptimizationResult:
@@ -132,7 +131,6 @@ def optimize_once(
     )
     system_prompt = _build_system_prompt(
         threshold=threshold,
-        extra_excludes=extra_excludes,
         primary_metric=primary_metric,
         focus_hint=focus_hint,
     )
@@ -415,9 +413,10 @@ patch must reduce it by at least {threshold:.0%} without breaking verify().
 ({callgrind_note})
 
 Tools available:
-- `profile_cprofile` — get hot functions. Default sort: cumtime. Use
-  exclude_paths to drop stdlib/third-party noise once you've identified
-  the user-code hotspots.
+- `profile_cprofile` — get hot functions. Default scope is target-repo
+  functions only (stdlib, NumPy, etc. are filtered out automatically); pass
+  `include_external=true` if you specifically need to see one of those.
+  Default sort: cumtime.
 - `read_source` — look at the source of any dotted qualname.
 - `edit_file` — string-replace edit in a workspace file. old_string must
   match exactly once; include surrounding context if needed.
@@ -448,7 +447,6 @@ End the turn with a brief one-sentence summary of what you changed and why.
 def _build_system_prompt(
     *,
     threshold: float,
-    extra_excludes: tuple[str, ...],
     primary_metric: str,
     focus_hint: FocusHint | None,
 ) -> str:
@@ -472,10 +470,6 @@ def _build_system_prompt(
             "on that function or its in-package callees. If you can see a clearly "
             "better hotspot elsewhere, you may switch — but say why in your "
             "final summary."
-        )
-    if extra_excludes:
-        base += "\nSuggested profile excludes for this repo: " + ", ".join(
-            f"`{e}`" for e in extra_excludes
         )
     return base
 

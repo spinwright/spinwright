@@ -111,7 +111,6 @@ def run(
         extraction_path=extraction,
         config=cfg,
         client=client,
-        extra_excludes=tuple(args.exclude_path),
     )
     _report(result)
     return 0 if result.accepted else 1

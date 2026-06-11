@@ -2,11 +2,13 @@
 and emits a JSON summary.
 
 Usage:
-    python cprofile_driver.py <extraction_path> <iterations> [<exclude_prefix1> ...]
+    python cprofile_driver.py <extraction_path> <iterations> <include_prefix> [<exclude1> ...]
 
-Excludes filter functions whose source filename matches any of the given path
-prefixes (substring match). Stdlib and third-party noise can be silenced this
-way without losing the ability to see them in a "no excludes" call.
+``include_prefix`` is a positive filter: entries whose source filename does
+NOT start with this string are dropped. Pass an empty string to disable.
+``exclude`` args are negative substring filters applied to whatever survives
+the include filter. The combination lets callers say "show only files under
+my repo, but drop the test harness within it."
 """
 
 from __future__ import annotations
@@ -37,7 +39,8 @@ def _load(path):
 def main() -> int:
     extraction_path = sys.argv[1]
     iterations = int(sys.argv[2])
-    excludes = sys.argv[3:]
+    include_prefix = sys.argv[3]  # empty string = no include filter
+    excludes = sys.argv[4:]
 
     mod = _load(extraction_path)
     state = mod.setup()
@@ -59,8 +62,12 @@ def main() -> int:
     stats = pstats.Stats(profiler)
     entries = []
     for (filename, lineno, funcname), (cc, nc, tt, ct, callers) in stats.stats.items():
-        # filter out excluded paths
-        if excludes and any(ex in (filename or "") for ex in excludes):
+        fn = filename or ""
+        # Positive include filter (when set): drop everything outside the prefix.
+        if include_prefix and not fn.startswith(include_prefix):
+            continue
+        # Negative excludes: drop within the include set.
+        if excludes and any(ex in fn for ex in excludes):
             continue
         entries.append(
             {

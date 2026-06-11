@@ -229,10 +229,17 @@ def build_optimization_tools(
         iterations = args.get("iterations", profile_default_iterations)
         sort_by = args.get("sort_by", "cumtime")
         limit = args.get("limit", 25)
+        # Default scope: target-repo entries only. The LLM can opt out by
+        # passing include_external=true (e.g. to verify a hot numpy call
+        # site, though it can usually just read_source the qualname instead).
+        include_prefix = (
+            None if args.get("include_external") else str(repo_dir.resolve())
+        )
         result = cprofile.profile_cprofile(
             venv_python,
             extraction_path,
             iterations=iterations,
+            include_prefix=include_prefix,
             exclude_paths=excludes,
         )
         top = cprofile.top_entries(result, by=sort_by, limit=limit)
@@ -264,9 +271,15 @@ def build_optimization_tools(
         ToolDefinition(
             name="profile_cprofile",
             description=(
-                "Profile the extraction's run() under cProfile. Returns the "
-                "hottest functions sorted by `sort_by` (default cumtime). "
-                "Use `exclude_paths` to drop noise (e.g. stdlib path)."
+                "Profile the extraction's run() under cProfile. By default "
+                "returns only functions defined inside the target repo, "
+                "sorted by `sort_by` (default cumtime). Pass "
+                "`include_external=true` to also see stdlib / third-party "
+                "functions (rare — usually you can just `read_source` the "
+                "qualname of an interesting call site instead). `exclude_paths` "
+                "is a secondary filter: substring matches dropped from "
+                "whatever the include filter kept (useful for excluding e.g. "
+                "the test harness directory)."
             ),
             input_schema={
                 "type": "object",
@@ -275,10 +288,14 @@ def build_optimization_tools(
                         "type": "integer",
                         "description": "How many run() calls to profile.",
                     },
+                    "include_external": {
+                        "type": "boolean",
+                        "description": "Include stdlib + third-party entries (default false).",
+                    },
                     "exclude_paths": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Substring-match these against source filenames; matching entries are dropped.",
+                        "description": "Additional substrings to drop AFTER the include filter.",
                     },
                     "sort_by": {
                         "type": "string",

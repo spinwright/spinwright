@@ -66,7 +66,6 @@ def run_loop(
     config: Config,
     client: ClientProtocol,
     model: str | None = None,
-    extra_excludes: tuple[str, ...] = (),
     on_progress: Callable[[str], None] | None = None,
 ) -> LoopResult:
     """Iterate optimize_once until budgets exhaust or no more candidates.
@@ -207,7 +206,6 @@ def run_loop(
             config=config,
             client=client,
             model=model,
-            extra_excludes=extra_excludes,
             focus_hint=focus,
             on_progress=on_progress,
         )
