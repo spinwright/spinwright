@@ -195,9 +195,7 @@ def _turn_progress(
     usage: dict,
 ) -> str:
     """One-line summary of an agent turn for progress streaming."""
-    tool_names = [
-        b.get("name", "?") for b in content if b.get("type") == "tool_use"
-    ]
+    tool_names = [b.get("name", "?") for b in content if b.get("type") == "tool_use"]
     parts = [f"turn {turn_no}/{max_turns}: {stop_reason or 'unknown'}"]
     if tool_names:
         parts.append("→ " + ", ".join(tool_names))
