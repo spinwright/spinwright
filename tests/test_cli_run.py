@@ -204,6 +204,7 @@ def test_run_cli_drives_loop_and_regression(tmp_path: Path, capsys):
         skip_regression=False,
         no_pr=False,
         runs_dir=str(tmp_path / "runs"),
+        model=None,
     )
 
     rc = cli_run.run(args, client_factory=lambda: client)
@@ -327,6 +328,7 @@ def test_run_cli_drops_regressing_patch(tmp_path: Path, capsys):
         skip_regression=False,
         no_pr=False,
         runs_dir=str(tmp_path / "runs"),
+        model=None,
     )
 
     rc = cli_run.run(args, client_factory=lambda: client)
@@ -351,6 +353,7 @@ def test_run_cli_handles_missing_api_key(tmp_path: Path, capsys):
         skip_regression=True,
         no_pr=False,
         runs_dir=str(tmp_path / "runs"),
+        model=None,
     )
     rc = cli_run.run(args, client_factory=boom)
     err = capsys.readouterr().err

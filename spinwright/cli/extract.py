@@ -122,6 +122,7 @@ def run(
         nodeid=args.test,
         config=cfg,
         client=client,
+        model=args.model,
     )
     _report(result, ws)
     return 0 if result.success else 1

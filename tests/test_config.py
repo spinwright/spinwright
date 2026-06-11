@@ -10,9 +10,7 @@ from spinwright import config
 
 def test_default_has_expected_models():
     cfg = config.default()
-    assert cfg.models.reasoning == "claude-opus-4-7"
-    assert cfg.models.classification == "claude-sonnet-4-6"
-    assert cfg.models.summarization == "claude-haiku-4-5-20251001"
+    assert cfg.models.model == "claude-opus-4-7"
 
 
 def test_default_modification_knobs_present():
@@ -54,9 +52,7 @@ def test_from_dict_full_round_trips():
             "max_extraction_turns": 15,
         },
         "models": {
-            "reasoning": "claude-opus-4-7",
-            "classification": "claude-sonnet-4-6",
-            "summarization": "claude-haiku-4-5-20251001",
+            "model": "claude-opus-4-7",
         },
         "pr": {
             "mode": "github_action",
@@ -69,6 +65,7 @@ def test_from_dict_full_round_trips():
     assert cfg.eligibility.allow_pure_conftest_imports is True
     assert cfg.measurement.autoscale_min_instructions == 500_000_000
     assert cfg.budget.max_extraction_turns == 15
+    assert cfg.models.model == "claude-opus-4-7"
     assert cfg.pr.mode == "github_action"
 
 

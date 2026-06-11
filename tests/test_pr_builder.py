@@ -150,7 +150,7 @@ def test_title_no_survivors(tmp_path: Path):
         regression=None,
         extraction=_meta(tmp_path),
         run_id="r1",
-        reasoning_model="claude-opus-4-7",
+        model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
     assert pr.title.startswith("perf(")
@@ -175,7 +175,7 @@ def test_title_one_survivor_uses_summary(tmp_path: Path):
         regression=None,
         extraction=_meta(tmp_path),
         run_id="r1",
-        reasoning_model="claude-opus-4-7",
+        model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
     assert "perf(static_frame.core.index)" in pr.title
@@ -197,7 +197,7 @@ def test_title_multi_survivor_uses_count(tmp_path: Path):
         regression=None,
         extraction=_meta(tmp_path),
         run_id="r1",
-        reasoning_model="claude-opus-4-7",
+        model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
     assert "2 optimizations" in pr.title
@@ -225,7 +225,7 @@ def test_title_callgrind_metric_label(tmp_path: Path):
         regression=None,
         extraction=_meta(tmp_path),
         run_id="r1",
-        reasoning_model="claude-opus-4-7",
+        model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
     assert "−40% instructions" in pr.title
@@ -252,7 +252,7 @@ def test_body_has_all_sections(tmp_path: Path):
         regression=None,
         extraction=_meta(tmp_path),
         run_id="run_20260529_120000",
-        reasoning_model="claude-opus-4-7",
+        model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
     body = pr.body
@@ -301,7 +301,7 @@ def test_body_quotes_dropped_patches(tmp_path: Path):
         regression=reg,
         extraction=_meta(tmp_path),
         run_id="r1",
-        reasoning_model="claude-opus-4-7",
+        model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
     assert pr.accepted_count == 1
@@ -318,7 +318,7 @@ def test_body_no_survivors_section_is_compact(tmp_path: Path):
         regression=None,
         extraction=_meta(tmp_path),
         run_id="r1",
-        reasoning_model="claude-opus-4-7",
+        model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
     assert "no improvements clearing the gate threshold" in pr.body

@@ -141,7 +141,7 @@ def optimize_once(
         callgrind_disabled_reason=callgrind_disabled_reason,
         focus_hint=focus_hint,
     )
-    chosen_model = model or config.models.reasoning
+    chosen_model = model or config.models.model
 
     emit(
         f"running optimization agent on {chosen_model} "
@@ -405,7 +405,10 @@ def _diff_paths(repo_dir: Path, diff: str) -> list[Path]:
 _SYSTEM_PROMPT_TEMPLATE = """\
 You are Spinwright's optimization agent. You have ONE shot at proposing a
 patch that makes the extraction's `run()` faster, with the verify() check
-still passing.
+still passing. While the code in `run()` is used for measurement, consider
+performance enhancements in the broader context of different scales of inputs
+and how the routine is used, i.e., do not narrowly enhance just for the specific
+configuration of `run()`.
 
 The orchestrator measures `run(state)` before and after your changes. The
 primary metric on this run is {primary_metric_label}; to be accepted, your

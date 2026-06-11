@@ -54,9 +54,11 @@ class BudgetConfig:
 
 @dataclass(frozen=True)
 class ModelConfig:
-    reasoning: str = "claude-opus-4-7"
-    classification: str = "claude-sonnet-4-6"
-    summarization: str = "claude-haiku-4-5-20251001"
+    # The single model used for all LLM agent work (extraction + optimization).
+    # Overridable per-invocation via the CLI ``--model`` flag. Anthropic ids
+    # work today; this is the seam where OpenAI/Ollama provider routing will be
+    # added (e.g. a future ``provider`` / ``base_url`` field alongside it).
+    model: str = "claude-opus-4-7"
 
 
 @dataclass(frozen=True)

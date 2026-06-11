@@ -3,6 +3,12 @@ from __future__ import annotations
 import argparse
 import sys
 
+_MODEL_HELP = (
+    "Model id for the LLM agent, overriding [models].model in config "
+    "(default: claude-opus-4-7). Anthropic ids work today; OpenAI/Ollama "
+    "provider routing is planned."
+)
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="spinwright")
@@ -112,6 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Pytest nodeid to extract (use `spinwright candidates` to find one).",
     )
     p_extract.add_argument("--config", default=None, help="Path to spinwright.toml.")
+    p_extract.add_argument("--model", default=None, help=_MODEL_HELP)
 
     p_measure = sub.add_parser("measure", help="Measure an extracted harness.")
     p_measure.add_argument(
@@ -172,6 +179,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="./spinwright-runs",
         help="Directory for per-run artifact subdirectories.",
     )
+    p_run.add_argument("--model", default=None, help=_MODEL_HELP)
 
     p_optimize = sub.add_parser(
         "optimize",
@@ -194,6 +202,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Extraction name; see `spinwright measure --help` for accepted forms.",
     )
     p_optimize.add_argument("--config", default=None, help="Path to spinwright.toml.")
+    p_optimize.add_argument("--model", default=None, help=_MODEL_HELP)
 
     return parser
 

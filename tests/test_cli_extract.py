@@ -188,6 +188,7 @@ def test_extract_cli_reuses_existing_workspace_and_succeeds(tmp_path: Path, caps
         workspace=str(ws.root),
         test="tests/test_mod.py::test_sum_of_squares",
         config=None,
+        model=None,
     )
     rc = cli_extract.run(args, client_factory=lambda: client)
     assert rc == 0
@@ -230,6 +231,7 @@ def test_extract_cli_reports_ineligible_test_without_calling_llm(
         workspace=str(ws.root),
         test="tests/test_mod.py::test_param",
         config=None,
+        model=None,
     )
     rc = cli_extract.run(args, client_factory=lambda: client)
     assert rc == 1
@@ -250,6 +252,7 @@ def test_extract_cli_handles_missing_api_key(tmp_path: Path, capsys):
         workspace=str(ws.root),
         test="tests/test_mod.py::test_sum_of_squares",
         config=None,
+        model=None,
     )
     rc = cli_extract.run(args, client_factory=boom)
     assert rc == 2

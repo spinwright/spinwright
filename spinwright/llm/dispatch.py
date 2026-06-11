@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from spinwright.llm.client import ClientProtocol
-from spinwright.llm.models import DEFAULT_MAX_TOKENS
 
 
 # ----------------------------------------------------------------------------
@@ -72,7 +71,7 @@ def run_conversation(
     initial_user_message: str | list[dict],
     tools: list[ToolDefinition],
     max_turns: int = 30,
-    max_tokens: int = DEFAULT_MAX_TOKENS,
+    max_tokens: int = 8192,
     cache_static_prefix: bool = True,
     on_progress: Callable[[str], None] | None = None,
 ) -> ConversationResult:

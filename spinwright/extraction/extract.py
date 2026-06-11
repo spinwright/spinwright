@@ -92,7 +92,7 @@ def extract(
     user_message = _build_user_message(
         nodeid=nodeid, test_meta=test_meta, target_path=target_path
     )
-    chosen_model = model or config.models.reasoning
+    chosen_model = model or config.models.model
 
     conversation = run_conversation(
         client,

@@ -156,6 +156,7 @@ def run(
     cfg = _load_config(args.config)
     ws = cli_extract._resolve_workspace(args.workspace)
     extraction = resolve_extraction(ws.root, args.extraction, corpus_dir=cfg.corpus.dir)
+    model = args.model or cfg.models.model
 
     try:
         client = client_factory()
@@ -168,6 +169,7 @@ def run(
         extraction_path=extraction,
         config=cfg,
         client=client,
+        model=model,
         on_progress=_progress,
     )
     _print_loop_summary(loop_result)
@@ -211,7 +213,7 @@ def run(
             regression=reg,
             extraction=meta,
             run_id=run_id,
-            reasoning_model=cfg.models.reasoning,
+            model=model,
             repo_dir=ws.repo_dir,
         )
         run_dir = run_log.write_run_directory(
