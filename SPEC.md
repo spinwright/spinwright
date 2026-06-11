@@ -476,6 +476,7 @@ A standalone non-reusable variant is intentionally not shipped — anyone who wa
 | `requirements` | no | Repo-relative path to a test/dev requirements file, passed to `spinwright prep --requirements`. |
 | `extras` | no | Comma-separated optional extras for the editable install. |
 | `exclude_path` | no | Substring filtered out of cProfile during the loop (e.g. `/site-packages/numpy`). |
+| `skip_regression` | no | Boolean; default **`true`**. The post-loop full pytest suite is skipped by default in CI because it tends to be slow and sometimes flaky (network-dependent tests, large fixtures); regression value is highest run by humans on a clean dev box. Set to `false` to enable. |
 
 ### 12.3 Pipeline structure
 

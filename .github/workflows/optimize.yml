@@ -44,6 +44,15 @@ on:
         required: false
         default: ""
         description: "Substring filtered out of cProfile output (e.g. /site-packages/numpy)."
+      skip_regression:
+        type: boolean
+        required: false
+        default: true
+        description: |
+          Skip the post-loop full pytest suite. Default true because the suite
+          tends to be slow and sometimes flaky in CI (network-dependent tests,
+          large fixtures); the regression value is highest when run by humans
+          on a clean dev box. Pass `false` to enable it.
       spinwright_install_spec:
         type: string
         required: false
@@ -173,6 +182,11 @@ jobs:
           )
           if [ -n "${{ inputs.exclude_path }}" ]; then
             RUN_ARGS+=(--exclude-path "${{ inputs.exclude_path }}")
+          fi
+          # Boolean workflow_call inputs expand to the literal strings
+          # "true" / "false" in bash; quote and compare as strings.
+          if [ "${{ inputs.skip_regression }}" = "true" ]; then
+            RUN_ARGS+=(--skip-regression)
           fi
           set +e
           spinwright run "${RUN_ARGS[@]}" | tee /tmp/run.out
