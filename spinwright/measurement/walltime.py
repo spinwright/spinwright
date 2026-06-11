@@ -14,7 +14,7 @@ def measure(
     venv_python: Path,
     extraction_path: Path,
     *,
-    repeats: int = 5,
+    repeats: int = 3,
     cwd: Path | None = None,
     timeout_seconds: float | None = None,
 ) -> tuple[WalltimeResult, VerifyResult]:

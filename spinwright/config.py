@@ -39,7 +39,7 @@ class EligibilityConfig:
 @dataclass(frozen=True)
 class MeasurementConfig:
     improvement_threshold: float = 0.20
-    walltime_repeats: int = 5
+    walltime_repeats: int = 3
     callgrind_path: str = "valgrind"
     autoscale_min_instructions: int = 1_000_000_000
 
