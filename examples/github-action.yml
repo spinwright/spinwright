@@ -52,7 +52,6 @@ jobs:
       requirements: ${{ inputs.requirements }}
       extras:       ${{ inputs.extras }}
       model:        ${{ inputs.model }}
-      ollama_host:  ${{ inputs.ollama_host }}
       # Remove this line once `pip install spinwright` works.
       spinwright_install_spec: 'git+https://github.com/spinwright/spinwright.git@main'
     secrets:
