@@ -88,7 +88,7 @@ def extract(
         repo_dir=ws.repo_dir,
         venv_python=venv_mod.python_executable(ws),
     )
-    system_prompt = _build_system_prompt(target_path=target_path)
+    system_prompt = _build_system_prompt()
     user_message = _build_user_message(
         nodeid=nodeid, test_meta=test_meta, target_path=target_path
     )
@@ -305,13 +305,13 @@ that case, say so explicitly.
 """
 
 
-def _build_system_prompt(*, target_path: Path) -> str:
+def _build_system_prompt() -> str:
     return _SYSTEM_PROMPT_TEMPLATE
 
 
 def _build_user_message(*, nodeid: str, test_meta: dict, target_path: Path) -> str:
     lines = [
-        f"Extract the test `{nodeid}` into a measurement harness.",
+        f"Extract and refactor the test `{nodeid}` into a measurement harness.",
         "",
         f"Write the extraction to this exact path: `{target_path}`",
         "",
