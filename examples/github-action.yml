@@ -5,9 +5,11 @@
 # reusable workflow at <owner>/spinwright/.github/workflows/optimize.yml.
 # Spinwright owns the pipeline definition; you own the inputs and secrets.
 #
-# Required repository secrets:
-#   ANTHROPIC_API_KEY  — used by the LLM steps.
+# Required repository secrets (only the one(s) for your chosen model):
+#   ANTHROPIC_API_KEY  — required if model is `anthropic/...` (or bare `claude-*`).
+#   OPENAI_API_KEY     — required if model is `openai/...` (or bare `gpt-*`/`o[1-9]-*`).
 #   GITHUB_TOKEN       — auto-provided by Actions, no setup needed.
+# Ollama runs locally on the runner; no secret needed for `ollama/...`.
 #
 # Customization:
 #   - Replace `OWNER` (twice) with the GitHub org/user that hosts the
@@ -37,6 +39,10 @@ on:
         description: "Comma-separated optional extras (e.g. 'dev,test')"
         required: false
         default: ""
+      model:
+        description: "Model spec (e.g. anthropic/claude-opus-4-7, openai/gpt-4o, ollama/llama3.1:8b). Blank = config default."
+        required: false
+        default: ""
 
 jobs:
   optimize:
@@ -46,7 +52,12 @@ jobs:
       test_path:    ${{ inputs.test_path }}
       requirements: ${{ inputs.requirements }}
       extras:       ${{ inputs.extras }}
+      model:        ${{ inputs.model }}
       # Remove this line once `pip install spinwright` works.
       spinwright_install_spec: 'git+https://github.com/spinwright/spinwright.git@main'
     secrets:
+      # Forward both — the reusable workflow accepts either. The one matching
+      # your chosen model must be set as a repository secret. Ollama needs
+      # neither (it runs against localhost on the runner).
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

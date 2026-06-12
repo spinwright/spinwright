@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from spinwright.config import Config
-from spinwright.llm.client import ClientProtocol
+from spinwright.llm.providers.base import Provider
 from spinwright.llm.dispatch import ConversationResult
 from spinwright.measurement.runner import DriverError
 from spinwright.measurement.types import CallgrindResult, VerifyResult, WalltimeResult
@@ -64,8 +64,8 @@ def run_loop(
     ws: Workspace,
     extraction_path: Path,
     config: Config,
-    client: ClientProtocol,
-    model: str | None = None,
+    provider: Provider,
+    model: str,
     on_progress: Callable[[str], None] | None = None,
 ) -> LoopResult:
     """Iterate optimize_once until budgets exhaust or no more candidates.
@@ -204,7 +204,7 @@ def run_loop(
             ws=ws,
             extraction_path=extraction_path,
             config=config,
-            client=client,
+            provider=provider,
             model=model,
             focus_hint=focus,
             on_progress=on_progress,

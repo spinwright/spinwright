@@ -78,9 +78,24 @@ class FakeMessages:
         return self.responses.pop(0)
 
 
-class FakeClient:
-    def __init__(self):
+class FakeProvider:
+    name = "fake"
+
+    def __init__(self) -> None:
         self.messages = FakeMessages()
+
+    def create_message(self, **kwargs):
+        from spinwright.llm.providers.base import ProviderResponse
+        self.messages.calls.append(copy.deepcopy(kwargs))
+        if not self.messages.responses:
+            raise AssertionError("no fake response queued for this call")
+        fake = self.messages.responses.pop(0)
+        content = [b.model_dump() for b in fake.content]
+        usage = fake.usage.model_dump() if hasattr(fake.usage, "model_dump") else (fake.usage or {})
+        return ProviderResponse(content=content, stop_reason=fake.stop_reason, usage=usage)
+
+
+FakeClient = FakeProvider
 
 
 _TARGET = """
@@ -207,7 +222,7 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
 #         model=None,
 #     )
 
-#     rc = cli_run.run(args, client_factory=lambda: client)
+#     rc = cli_run.run(args, provider_factory=lambda _spec: (client, "claude-test"))
 #     out = capsys.readouterr().out
 #     assert "Agent loop" in out
 #     assert "Regression check" in out
@@ -331,7 +346,7 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
 #         model=None,
 #     )
 
-#     rc = cli_run.run(args, client_factory=lambda: client)
+#     rc = cli_run.run(args, provider_factory=lambda _spec: (client, "claude-test"))
 #     out = capsys.readouterr().out
 #     assert "Regression check" in out
 #     # Patch was dropped because it broke the suite
@@ -344,7 +359,7 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
 #     ws, ext_path = _make_workspace(tmp_path)
 
 #     def boom():
-#         raise cli_run.client_mod.MissingAPIKeyError("no key")
+#         raise cli_run.factory_mod.MissingAPIKeyError("no key")
 
 #     args = argparse.Namespace(
 #         workspace=str(ws.root),
@@ -355,7 +370,7 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
 #         runs_dir=str(tmp_path / "runs"),
 #         model=None,
 #     )
-#     rc = cli_run.run(args, client_factory=boom)
+#     rc = cli_run.run(args, provider_factory=boom)
 #     err = capsys.readouterr().err
 #     assert rc == 2
 #     assert "no key" in err

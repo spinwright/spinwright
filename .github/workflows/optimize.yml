@@ -48,6 +48,16 @@ on:
           tends to be slow and sometimes flaky in CI (network-dependent tests,
           large fixtures); the regression value is highest when run by humans
           on a clean dev box. Pass `false` to enable it.
+      model:
+        type: string
+        required: false
+        default: ""
+        description: |
+          Model spec, e.g. 'anthropic/claude-opus-4-7', 'openai/gpt-4o',
+          'ollama/llama3.1:8b'. If blank, falls back to whatever the
+          target's spinwright.toml configures (default: claude-opus-4-7).
+          The matching API key secret must be set: ANTHROPIC_API_KEY for
+          anthropic/, OPENAI_API_KEY for openai/, none for ollama/.
       spinwright_install_spec:
         type: string
         required: false
@@ -62,8 +72,11 @@ on:
         description: "Python version for the workspace's venv."
     secrets:
       ANTHROPIC_API_KEY:
-        required: true
-        description: "Anthropic API key for the LLM steps."
+        required: false
+        description: "Anthropic API key (required when model uses anthropic/)."
+      OPENAI_API_KEY:
+        required: false
+        description: "OpenAI API key (required when model uses openai/)."
 
 permissions:
   contents: write
@@ -149,11 +162,21 @@ jobs:
 
       - name: Extract harness
         env:
+          # Set BOTH; spinwright reads whichever its model spec needs.
+          # Empty values are harmless — make_provider only complains if the
+          # required env var is missing AND no model override was supplied.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          spinwright extract "${{ steps.prep.outputs.ws }}" \
-            --test "${{ steps.choose.outputs.nodeid }}" \
+          EXTRACT_ARGS=(
+            "${{ steps.prep.outputs.ws }}"
+            --test "${{ steps.choose.outputs.nodeid }}"
             --config /tmp/spinwright.toml
+          )
+          if [ -n "${{ inputs.model }}" ]; then
+            EXTRACT_ARGS+=(--model "${{ inputs.model }}")
+          fi
+          spinwright extract "${EXTRACT_ARGS[@]}"
 
       - name: Compute extraction stem
         id: stem
@@ -165,6 +188,7 @@ jobs:
         id: run
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           # Stream Python stdout/stderr unbuffered so loop/agent progress shows
           # up live in the step log instead of all at once when the step ends.
           PYTHONUNBUFFERED: "1"
@@ -175,6 +199,9 @@ jobs:
             --config /tmp/spinwright.toml
             --runs-dir "$GITHUB_WORKSPACE/spinwright-runs"
           )
+          if [ -n "${{ inputs.model }}" ]; then
+            RUN_ARGS+=(--model "${{ inputs.model }}")
+          fi
           # Boolean workflow_call inputs expand to the literal strings
           # "true" / "false" in bash; quote and compare as strings.
           if [ "${{ inputs.skip_regression }}" = "true" ]; then

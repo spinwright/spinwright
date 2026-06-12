@@ -81,9 +81,27 @@ class FakeMessages:
         return self.responses.pop(0)
 
 
-class FakeClient:
+class FakeProvider:
+    """Provider-protocol fake: queue FakeMessage objects; create_message pops and
+    returns ProviderResponse. messages.calls retains kwargs for assertions."""
+
+    name = "fake"
+
     def __init__(self) -> None:
         self.messages = FakeMessages()
+
+    def create_message(self, **kwargs):
+        from spinwright.llm.providers.base import ProviderResponse
+        self.messages.calls.append(copy.deepcopy(kwargs))
+        if not self.messages.responses:
+            raise AssertionError("no fake response queued for this call")
+        fake = self.messages.responses.pop(0)
+        content = [b.model_dump() for b in fake.content]
+        usage = fake.usage.model_dump() if hasattr(fake.usage, "model_dump") else (fake.usage or {})
+        return ProviderResponse(content=content, stop_reason=fake.stop_reason, usage=usage)
+
+
+FakeClient = FakeProvider   # backwards-compat alias for older test bodies
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +253,8 @@ def test_happy_path_writes_commits_and_succeeds(tmp_path: Path):
         ws=ws,
         nodeid="tests/test_mod.py::test_sum_of_squares",
         config=cfg,
-        client=client,
+        provider=client,
+        model="claude-test",
     )
 
     assert result.success, result.failure_reason
@@ -297,7 +316,8 @@ def test_sanity_failure_does_not_commit(tmp_path: Path):
         ws=ws,
         nodeid="tests/test_mod.py::test_sum_of_squares",
         config=cfg,
-        client=client,
+        provider=client,
+        model="claude-test",
     )
     assert not result.success
     assert result.sanity_passed is False
@@ -337,7 +357,8 @@ def test_missing_extraction_reports_failure(tmp_path: Path):
         ws=ws,
         nodeid="tests/test_mod.py::test_sum_of_squares",
         config=cfg,
-        client=client,
+        provider=client,
+        model="claude-test",
     )
     assert not result.success
     assert result.extraction_path is None
@@ -370,7 +391,8 @@ def test_ineligible_test_short_circuits(tmp_path: Path):
         ws=ws,
         nodeid="tests/test_mod.py::test_param",
         config=cfg,
-        client=client,
+        provider=client,
+        model="claude-test",
     )
     assert not result.success
     assert result.failure_reason and "ineligible" in result.failure_reason
@@ -392,7 +414,8 @@ def test_missing_test_file_short_circuits(tmp_path: Path):
         ws=ws,
         nodeid="tests/does_not_exist.py::test_x",
         config=cfg,
-        client=client,
+        provider=client,
+        model="claude-test",
     )
     assert not result.success
     assert "not found" in (result.failure_reason or "")

@@ -94,9 +94,29 @@ spinwright/
 
 ### 4.2 Model Selection
 
-- Reasoning steps (extraction planning, bottleneck identification, patch proposal): **Claude Opus 4.7**.
-- Tool-output summarization (compressing long profiler output before it enters the reasoning model's context): **Claude Haiku 4.5**.
-- Both invoked via the Anthropic API. Model strings configurable.
+- A single model serves all LLM agent work (extraction + optimization). Default: **Claude Opus 4.7**. Configurable per-invocation via the CLI `--model` flag or the workflow `model` input; persistable in `spinwright.toml` under `[models] model = "..."`.
+- **Multi-provider routing.** The model spec drives provider selection:
+
+  | Spec form | Provider | Example |
+  |---|---|---|
+  | `anthropic/<model_id>` | Anthropic SDK | `anthropic/claude-opus-4-7` |
+  | `openai/<model_id>` | OpenAI Chat Completions API | `openai/gpt-4o` |
+  | `ollama/<model_id>` | Ollama via openai-compat (`$OLLAMA_HOST/v1`) | `ollama/llama3.1:8b` |
+  | bare `claude-*` | anthropic (heuristic) | `claude-opus-4-7` |
+  | bare `gpt-*` / `o[1-9]-*` | openai (heuristic) | `gpt-4o`, `o4-mini` |
+  | anything else | error: ambiguous — use `provider/model` | — |
+
+- **API key resolution.** `make_provider(spec)` eagerly resolves the right env var:
+
+  | Provider | Env var | Required? |
+  |---|---|---|
+  | anthropic | `ANTHROPIC_API_KEY` | yes |
+  | openai | `OPENAI_API_KEY` | yes |
+  | ollama | none (`OLLAMA_HOST` honored for non-default base URL; `OLLAMA_API_KEY` honored for auth proxies) | no |
+
+- **Provider abstraction.** All providers normalize requests/responses to Anthropic-style content-block shape internally (`{type:"text"}` / `{type:"tool_use"}` blocks, `stop_reason` vocabulary, `input_tokens`/`output_tokens` usage fields). The dispatch loop stays provider-agnostic; only the network call at the inner-loop boundary differs.
+
+- **Caching.** Spinwright marks the static prefix (`tools` + `system`) with `cache_control: ephemeral` when targeting Anthropic. Non-Anthropic providers silently strip the marker — OpenAI auto-caches; Ollama doesn't cache.
 
 ### 4.3 Implementation Language
 
@@ -367,8 +387,12 @@ max_iterations = 30
 max_wall_clock_minutes = 60
 
 [models]
-reasoning = "claude-opus-4-7"
-summarization = "claude-haiku-4-5-20251001"
+# Single model spec used for all LLM agent work. Either bare (auto-routed
+# via heuristics for claude-*/gpt-*/o[1-9]-*) or prefixed:
+#   model = "claude-opus-4-7"           # auto-routed → anthropic
+#   model = "openai/gpt-4o"              # explicit
+#   model = "ollama/llama3.1:8b"         # local Ollama
+model = "claude-opus-4-7"
 
 [pr]
 mode = "local"  # or "github_action"
@@ -464,8 +488,11 @@ A standalone non-reusable variant is intentionally not shipped — anyone who wa
 
 ### 12.1 Required secrets
 
-- `ANTHROPIC_API_KEY` — used by the LLM steps (`extract`, `run`).
+- `ANTHROPIC_API_KEY` — required when the chosen `model` uses the `anthropic/` provider (or a bare `claude-*` name that routes there). Used by the `extract` and `run` steps.
+- `OPENAI_API_KEY` — required when the chosen `model` uses the `openai/` provider (or a bare `gpt-*`/`o[1-9]-*` name that routes there).
 - `GITHUB_TOKEN` — auto-provided by Actions; used by the workflow to push the branch and open the PR.
+
+Both API-key secrets are forwarded to the reusable workflow unconditionally; the workflow's bash sets BOTH env vars (one will be empty) and spinwright reads whichever the model spec needs. If the wrong one is empty, `make_provider` raises with a clear message naming the env var that's missing. Ollama models (`ollama/...`) need no API key — the model runs on the runner against `localhost:11434` (or `$OLLAMA_HOST`).
 
 ### 12.2 Workflow inputs
 
@@ -476,6 +503,7 @@ A standalone non-reusable variant is intentionally not shipped — anyone who wa
 | `requirements` | no | Repo-relative path to a test/dev requirements file, passed to `spinwright prep --requirements`. |
 | `extras` | no | Comma-separated optional extras for the editable install. |
 | `skip_regression` | no | Boolean; default **`true`**. The post-loop full pytest suite is skipped by default in CI because it tends to be slow and sometimes flaky (network-dependent tests, large fixtures); regression value is highest run by humans on a clean dev box. Set to `false` to enable. |
+| `model` | no | Model spec (e.g. `anthropic/claude-opus-4-7`, `openai/gpt-4o`, `ollama/llama3.1:8b`). Blank ⇒ falls back to whatever `[models] model` in `spinwright.toml` says. The matching API-key secret must be set on the calling repo for `anthropic/` or `openai/`; Ollama needs no secret. |
 
 ### 12.3 Pipeline structure
 
@@ -555,7 +583,7 @@ Spinwright is expected to handle:
 2. **M2 — Single-shot optimization. ✅ (mostly)** Callgrind (Linux, via two-run subtraction since the `CALLGRIND_*` macros need inline assembly), cProfile profiling, single-iteration optimization loop with profile→propose→measure→accept-or-revert via `spinwright optimize`. The orchestrator currently gates on median wallclock on every platform; switching it to the Callgrind gate on Linux is a small follow-up (already-built `measurement.callgrind` is wired into the `measure` CLI but not yet into the `optimize` decision path). pyinstrument and line_profiler tools deferred until needed — cProfile is the LLM's signal for now.
 3. **M3 — Agent loop + regression check. ✅ (BFS, not DFS)** Full agent loop with `explored` tracking, focus-hinted optimization, linear-revert-with-drop-all fallback on regression, `spinwright run` end-to-end CLI. (Soft-accept is out — see Appendix A, Mod 6.) Depth-first descent into callees within a function is deferred until `line_profiler` lands — the current loop is BFS over top-cumtime functions in the target package, which is the practical equivalent without line-level profiling. Multi-patch bisect refinement (when no single revert restores green) is also deferred; the fallback is conservative drop-all.
 4. **M4 — PR assembly & local CLI. ✅** PR title + body rendering (SPEC §10 template), per-run artifact directory under `./spinwright-runs/<run_id>/` with `PR.md` and `run_summary.json`, local-mode that always writes PR.md, github_action-mode that pushes the branch and calls `gh pr create --body-file` (falls back to local with a clear reason when `gh` is missing or `git push` fails). Wired into `spinwright run` with `--no-pr` and `--runs-dir` flags.
-5. **M5 — GitHub Action. ✅ (initial)** Reusable workflow at `.github/workflows/optimize.yml` (defines the 13-step pipeline; `workflow_call` trigger). Target repos use a ~25-line caller stub at `examples/github-action.yml` that does `uses: <owner>/spinwright/.github/workflows/optimize.yml@<ref>` — pipeline lives once and is versioned with spinwright, target repos pin via `@ref` for stability. Optional `test`/`test_path`/`requirements`/`extras` inputs (plus `skip_regression`, default true); `spinwright_install_spec` defaults to PyPI but falls back to a git URL for pre-release. Ubuntu + valgrind + Python 3.11; full pipeline + artifact upload + `gh pr create` on surviving patches. CLI gained machine-readable trailers (`RUN_DIR=`, `SURVIVING_PATCHES=`) so the workflow can grep instead of parsing the human report. Persistent `bottleneck_history.json` is still M6.
+5. **M5 — GitHub Action. ✅ (initial)** Reusable workflow at `.github/workflows/optimize.yml` (defines the 13-step pipeline; `workflow_call` trigger). Target repos use a ~25-line caller stub at `examples/github-action.yml` that does `uses: <owner>/spinwright/.github/workflows/optimize.yml@<ref>` — pipeline lives once and is versioned with spinwright, target repos pin via `@ref` for stability. Optional `test`/`test_path`/`requirements`/`extras`/`model` inputs (plus `skip_regression`, default true); `spinwright_install_spec` defaults to PyPI but falls back to a git URL for pre-release. Ubuntu + valgrind + Python 3.11; full pipeline + artifact upload + `gh pr create` on surviving patches. CLI gained machine-readable trailers (`RUN_DIR=`, `SURVIVING_PATCHES=`) so the workflow can grep instead of parsing the human report. Persistent `bottleneck_history.json` is still M6.
 6. **M6 — Hardening.** Failure-mode handling, budget enforcement, structured logging, run-summary reporting.
 
 ## Appendix A. Modifications adopted from M1 planning

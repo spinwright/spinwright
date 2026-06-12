@@ -81,9 +81,27 @@ class FakeMessages:
         return self.responses.pop(0)
 
 
-class FakeClient:
+class FakeProvider:
+    """Provider-protocol fake: queue FakeMessage objects; create_message pops and
+    returns ProviderResponse. messages.calls retains kwargs for assertions."""
+
+    name = "fake"
+
     def __init__(self) -> None:
         self.messages = FakeMessages()
+
+    def create_message(self, **kwargs):
+        from spinwright.llm.providers.base import ProviderResponse
+        self.messages.calls.append(copy.deepcopy(kwargs))
+        if not self.messages.responses:
+            raise AssertionError("no fake response queued for this call")
+        fake = self.messages.responses.pop(0)
+        content = [b.model_dump() for b in fake.content]
+        usage = fake.usage.model_dump() if hasattr(fake.usage, "model_dump") else (fake.usage or {})
+        return ProviderResponse(content=content, stop_reason=fake.stop_reason, usage=usage)
+
+
+FakeClient = FakeProvider   # backwards-compat alias for older test bodies
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +208,7 @@ def test_extract_cli_reuses_existing_workspace_and_succeeds(tmp_path: Path, caps
         config=None,
         model=None,
     )
-    rc = cli_extract.run(args, client_factory=lambda: client)
+    rc = cli_extract.run(args, provider_factory=lambda _spec: (client, "claude-test"))
     assert rc == 0
     captured = capsys.readouterr()
     assert "using workspace at" in captured.err
@@ -233,7 +251,7 @@ def test_extract_cli_reports_ineligible_test_without_calling_llm(
         config=None,
         model=None,
     )
-    rc = cli_extract.run(args, client_factory=lambda: client)
+    rc = cli_extract.run(args, provider_factory=lambda _spec: (client, "claude-test"))
     assert rc == 1
     captured = capsys.readouterr()
     assert "Extraction FAILED" in captured.out
@@ -245,8 +263,8 @@ def test_extract_cli_reports_ineligible_test_without_calling_llm(
 def test_extract_cli_handles_missing_api_key(tmp_path: Path, capsys):
     ws = _make_workspace(tmp_path)
 
-    def boom():
-        raise cli_extract.client_mod.MissingAPIKeyError("no key")
+    def boom(*_):
+        raise cli_extract.factory_mod.MissingAPIKeyError("no key")
 
     args = argparse.Namespace(
         workspace=str(ws.root),
@@ -254,7 +272,7 @@ def test_extract_cli_handles_missing_api_key(tmp_path: Path, capsys):
         config=None,
         model=None,
     )
-    rc = cli_extract.run(args, client_factory=boom)
+    rc = cli_extract.run(args, provider_factory=boom)
     assert rc == 2
     captured = capsys.readouterr()
     assert "no key" in captured.err

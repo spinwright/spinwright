@@ -11,6 +11,7 @@ from spinwright.llm.dispatch import (
     ToolDefinition,
     run_conversation,
 )
+from spinwright.llm.providers.base import ProviderResponse
 
 
 # ---------------------------------------------------------------------------
@@ -83,9 +84,36 @@ class FakeMessages:
         return self.responses.pop(0)
 
 
-class FakeClient:
+class FakeProvider:
+    """Implements the Provider protocol with a queued/canned response stream.
+
+    Tests build FakeMessage instances (the old SDK-shaped objects) and put them
+    on ``self.messages.responses``; ``create_message`` pops the next one and
+    converts it to a ProviderResponse. ``self.messages.calls`` captures the
+    kwargs that came in for assertion."""
+
+    name = "fake"
+
     def __init__(self) -> None:
         self.messages = FakeMessages()
+
+    def create_message(self, **kwargs) -> ProviderResponse:
+        self.messages.calls.append(copy.deepcopy(kwargs))
+        if not self.messages.responses:
+            raise AssertionError("no fake response queued for this call")
+        fake = self.messages.responses.pop(0)
+        content = [b.model_dump() for b in fake.content]
+        usage = fake.usage.model_dump() if hasattr(fake.usage, "model_dump") else (fake.usage or {})
+        return ProviderResponse(
+            content=content,
+            stop_reason=fake.stop_reason,
+            usage=usage,
+        )
+
+
+# Backwards-compat alias for older tests that imported the class by its old
+# name — newer tests should use FakeProvider directly.
+FakeClient = FakeProvider
 
 
 # ---------------------------------------------------------------------------

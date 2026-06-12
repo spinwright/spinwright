@@ -7,8 +7,8 @@ from typing import Callable
 
 from spinwright import config as cfg_mod
 from spinwright.cli._extraction_arg import resolve_extraction
-from spinwright.llm import client as client_mod
-from spinwright.llm.client import ClientProtocol
+from spinwright.llm import factory as factory_mod
+from spinwright.llm.providers.base import Provider
 from spinwright.optimization import optimize as opt_mod
 from spinwright.repo import workspace as workspace_mod
 
@@ -94,15 +94,16 @@ def _report(result: opt_mod.OptimizationResult) -> None:
 def run(
     args: argparse.Namespace,
     *,
-    client_factory: Callable[[], ClientProtocol] = client_mod.make_client,
+    provider_factory: Callable[[str], tuple[Provider, str]] = factory_mod.make_provider,
 ) -> int:
     cfg = _load_config(args.config)
     ws = _resolve_workspace(args.workspace)
     extraction = resolve_extraction(ws.root, args.extraction, corpus_dir=cfg.corpus.dir)
+    model_spec = args.model or cfg.models.model
 
     try:
-        client = client_factory()
-    except client_mod.MissingAPIKeyError as e:
+        provider, model_id = provider_factory(model_spec)
+    except (factory_mod.MissingAPIKeyError, factory_mod.AmbiguousModelSpecError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
@@ -110,8 +111,8 @@ def run(
         ws=ws,
         extraction_path=extraction,
         config=cfg,
-        client=client,
-        model=args.model,
+        provider=provider,
+        model=model_id,
     )
     _report(result)
     return 0 if result.accepted else 1

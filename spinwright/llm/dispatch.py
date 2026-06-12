@@ -5,7 +5,7 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from spinwright.llm.client import ClientProtocol
+from spinwright.llm.providers.base import Provider
 
 
 # ----------------------------------------------------------------------------
@@ -64,7 +64,7 @@ class DispatchError(RuntimeError):
 
 
 def run_conversation(
-    client: ClientProtocol,
+    provider: Provider,
     *,
     model: str,
     system: str,
@@ -82,15 +82,18 @@ def run_conversation(
     response are dispatched through their ``handler`` and the results are fed
     back as a user message.
 
-    ``client`` is any object exposing ``messages.create(**kwargs) -> Message``
-    with the Anthropic SDK shape; the real SDK works, and so does any duck-
-    typed fake (see tests).
+    ``provider`` is a ``spinwright.llm.providers.base.Provider`` instance —
+    obtain one via ``spinwright.llm.factory.make_provider(model_spec)``. All
+    providers normalize their response to Anthropic-style content blocks, so
+    this loop is provider-agnostic.
 
     Caching: Anthropic's cache prefix order is ``tools → system → messages``.
     A single ``cache_control`` marker on the last system block therefore caches
     both tools and system in one breakpoint — that's what ``cache_static_prefix``
     does. We don't add a separate marker on tools because it would create a
-    redundant second breakpoint without changing what gets cached.
+    redundant second breakpoint without changing what gets cached. Non-Anthropic
+    providers silently strip the marker (OpenAI auto-caches; Ollama has no
+    caching).
 
     ``on_progress``, if given, is called with a short human-readable string
     after each model turn — used by the CLI to stream agent activity (turn
@@ -114,16 +117,17 @@ def run_conversation(
     result = ConversationResult(stop_reason="unknown", turns=turns, final_text="")
 
     for turn_no in range(1, max_turns + 1):
-        response = client.messages.create(
+        response = provider.create_message(
             model=model,
-            max_tokens=max_tokens,
             system=system_payload,
-            tools=tools_payload,
             messages=messages,
+            tools=tools_payload,
+            max_tokens=max_tokens,
+            cache_static_prefix=cache_static_prefix,
         )
-        assistant_content = [_block_to_dict(b) for b in response.content]
+        assistant_content = response.content
         messages.append({"role": "assistant", "content": assistant_content})
-        usage_dict = _usage_to_dict(response.usage)
+        usage_dict = response.usage
         turns.append(
             TurnRecord(
                 role="assistant",
@@ -216,24 +220,6 @@ def _build_tools(tools: list[ToolDefinition]) -> list[dict]:
         {"name": t.name, "description": t.description, "input_schema": t.input_schema}
         for t in tools
     ]
-
-
-def _block_to_dict(block: Any) -> dict:
-    if hasattr(block, "model_dump"):
-        return block.model_dump(exclude_none=True)
-    if isinstance(block, dict):
-        return block
-    raise DispatchError(f"unrecognized content block type: {type(block).__name__}")
-
-
-def _usage_to_dict(usage: Any) -> dict:
-    if usage is None:
-        return {}
-    if hasattr(usage, "model_dump"):
-        return usage.model_dump(exclude_none=True)
-    if isinstance(usage, dict):
-        return usage
-    return {}
 
 
 def _accumulate_usage(result: ConversationResult, usage: dict) -> None:

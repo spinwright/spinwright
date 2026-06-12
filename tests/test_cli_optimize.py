@@ -79,9 +79,27 @@ class FakeMessages:
         return self.responses.pop(0)
 
 
-class FakeClient:
+class FakeProvider:
+    """Provider-protocol fake: queue FakeMessage objects; create_message pops and
+    returns ProviderResponse. messages.calls retains kwargs for assertions."""
+
+    name = "fake"
+
     def __init__(self) -> None:
         self.messages = FakeMessages()
+
+    def create_message(self, **kwargs):
+        from spinwright.llm.providers.base import ProviderResponse
+        self.messages.calls.append(copy.deepcopy(kwargs))
+        if not self.messages.responses:
+            raise AssertionError("no fake response queued for this call")
+        fake = self.messages.responses.pop(0)
+        content = [b.model_dump() for b in fake.content]
+        usage = fake.usage.model_dump() if hasattr(fake.usage, "model_dump") else (fake.usage or {})
+        return ProviderResponse(content=content, stop_reason=fake.stop_reason, usage=usage)
+
+
+FakeClient = FakeProvider   # backwards-compat alias for older test bodies
 
 
 _SLOW = """
@@ -178,7 +196,7 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
 #         config=None,
 #         model=None,
 #     )
-#     rc = cli_optimize.run(args, client_factory=lambda: client)
+#     rc = cli_optimize.run(args, provider_factory=lambda _spec: (client, "claude-test"))
 #     out = capsys.readouterr().out
 #     assert rc == 0
 #     assert "ACCEPTED" in out
@@ -221,7 +239,7 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
 #         config=None,
 #         model=None,
 #     )
-#     rc = cli_optimize.run(args, client_factory=lambda: client)
+#     rc = cli_optimize.run(args, provider_factory=lambda _spec: (client, "claude-test"))
 #     out = capsys.readouterr().out
 #     assert rc == 1
 #     assert "REJECTED" in out
@@ -233,7 +251,7 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
 #     ws, ext_path = _make_workspace(tmp_path)
 
 #     def boom():
-#         raise cli_optimize.client_mod.MissingAPIKeyError("no key")
+#         raise cli_optimize.factory_mod.MissingAPIKeyError("no key")
 
 #     args = argparse.Namespace(
 #         workspace=str(ws.root),
@@ -241,7 +259,7 @@ def _make_workspace(tmp_path: Path) -> tuple[Workspace, Path]:
 #         config=None,
 #         model=None,
 #     )
-#     rc = cli_optimize.run(args, client_factory=boom)
+#     rc = cli_optimize.run(args, provider_factory=boom)
 #     assert rc == 2
 #     err = capsys.readouterr().err
 #     assert "no key" in err

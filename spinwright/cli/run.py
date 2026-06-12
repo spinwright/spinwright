@@ -10,8 +10,8 @@ from spinwright import config as cfg_mod
 from spinwright import run_log
 from spinwright.cli import extract as cli_extract  # workspace auto-detect / prep
 from spinwright.cli._extraction_arg import resolve_extraction
-from spinwright.llm import client as client_mod
-from spinwright.llm.client import ClientProtocol
+from spinwright.llm import factory as factory_mod
+from spinwright.llm.providers.base import Provider
 from spinwright.optimization import loop as loop_mod
 from spinwright.optimization import regression as regression_mod
 from spinwright.pr import builder as pr_builder
@@ -151,16 +151,16 @@ def _print_publish_summary(pub: pr_publish.PublishResult, run_dir: Path) -> None
 def run(
     args: argparse.Namespace,
     *,
-    client_factory: Callable[[], ClientProtocol] = client_mod.make_client,
+    provider_factory: Callable[[str], tuple[Provider, str]] = factory_mod.make_provider,
 ) -> int:
     cfg = _load_config(args.config)
     ws = cli_extract._resolve_workspace(args.workspace)
     extraction = resolve_extraction(ws.root, args.extraction, corpus_dir=cfg.corpus.dir)
-    model = args.model or cfg.models.model
+    model_spec = args.model or cfg.models.model
 
     try:
-        client = client_factory()
-    except client_mod.MissingAPIKeyError as e:
+        provider, model_id = provider_factory(model_spec)
+    except (factory_mod.MissingAPIKeyError, factory_mod.AmbiguousModelSpecError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
@@ -168,8 +168,8 @@ def run(
         ws=ws,
         extraction_path=extraction,
         config=cfg,
-        client=client,
-        model=model,
+        provider=provider,
+        model=model_id,
         on_progress=_progress,
     )
     _print_loop_summary(loop_result)

@@ -81,9 +81,24 @@ class FakeMessages:
         return self.responses.pop(0)
 
 
-class FakeClient:
-    def __init__(self):
+class FakeProvider:
+    name = "fake"
+
+    def __init__(self) -> None:
         self.messages = FakeMessages()
+
+    def create_message(self, **kwargs):
+        from spinwright.llm.providers.base import ProviderResponse
+        self.messages.calls.append(copy.deepcopy(kwargs))
+        if not self.messages.responses:
+            raise AssertionError("no fake response queued for this call")
+        fake = self.messages.responses.pop(0)
+        content = [b.model_dump() for b in fake.content]
+        usage = fake.usage.model_dump() if hasattr(fake.usage, "model_dump") else (fake.usage or {})
+        return ProviderResponse(content=content, stop_reason=fake.stop_reason, usage=usage)
+
+
+FakeClient = FakeProvider
 
 
 # ---------------------------------------------------------------------------
@@ -387,7 +402,7 @@ def _cfg(
 #         FakeMessage(content=[FakeText(text="nothing more")], stop_reason="end_turn"),
 #     )
 
-#     result = loop.run_loop(ws=ws, extraction_path=ext_path, config=cfg, client=client)
+#     result = loop.run_loop(ws=ws, extraction_path=ext_path, config=cfg, provider=client, model="claude-test")
 
 #     assert result.success
 #     assert result.accepted_count == 2
@@ -428,7 +443,7 @@ def test_loop_stops_on_token_budget(tmp_path: Path):
         ),
     )
 
-    result = loop.run_loop(ws=ws, extraction_path=ext_path, config=cfg, client=client)
+    result = loop.run_loop(ws=ws, extraction_path=ext_path, config=cfg, provider=client, model="claude-test")
     assert result.success
     assert result.stop_reason == "token_budget_exhausted"
     assert len(result.iterations) == 1
@@ -485,7 +500,7 @@ def test_loop_stops_on_token_budget(tmp_path: Path):
 #     loop.time = _FakeTime
 #     try:
 #         result = loop.run_loop(
-#             ws=ws, extraction_path=ext_path, config=cfg, client=client
+#             ws=ws, extraction_path=ext_path, config=cfg, provider=client, model="claude-test"
 #         )
 #     finally:
 #         loop.time = real_time
@@ -512,7 +527,7 @@ def test_loop_stops_on_token_budget(tmp_path: Path):
 #             ),
 #         )
 
-#     result = loop.run_loop(ws=ws, extraction_path=ext_path, config=cfg, client=client)
+#     result = loop.run_loop(ws=ws, extraction_path=ext_path, config=cfg, provider=client, model="claude-test")
 #     assert result.success
 #     assert result.accepted_count == 0
 #     # All three iterations added to explored, each with a distinct focus key

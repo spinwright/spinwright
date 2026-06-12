@@ -8,8 +8,8 @@ from pathlib import Path
 import spinwright
 from spinwright.config import Config
 from spinwright.extraction import eligibility
-from spinwright.llm.client import ClientProtocol
 from spinwright.llm.dispatch import ConversationResult, run_conversation
+from spinwright.llm.providers.base import Provider
 from spinwright.repo import venv as venv_mod
 from spinwright.repo import workspace as workspace_mod
 from spinwright.repo.workspace import Workspace
@@ -40,8 +40,8 @@ def extract(
     ws: Workspace,
     nodeid: str,
     config: Config,
-    client: ClientProtocol,
-    model: str | None = None,
+    provider: Provider,
+    model: str,
 ) -> ExtractionResult:
     """Drive the LLM-led extraction conversation for a single test.
 
@@ -92,11 +92,9 @@ def extract(
     user_message = _build_user_message(
         nodeid=nodeid, test_meta=test_meta, target_path=target_path
     )
-    chosen_model = model or config.models.model
-
     conversation = run_conversation(
-        client,
-        model=chosen_model,
+        provider,
+        model=model,
         system=system_prompt,
         initial_user_message=user_message,
         tools=tools,

@@ -6,7 +6,7 @@ from typing import Callable
 
 from spinwright import platform as platform_mod
 from spinwright.config import Config
-from spinwright.llm.client import ClientProtocol
+from spinwright.llm.providers.base import Provider
 from spinwright.llm.dispatch import ConversationResult, run_conversation
 from spinwright.measurement import callgrind as callgrind_mod
 from spinwright.measurement import walltime
@@ -67,8 +67,8 @@ def optimize_once(
     ws: Workspace,
     extraction_path: Path,
     config: Config,
-    client: ClientProtocol,
-    model: str | None = None,
+    provider: Provider,
+    model: str,
     focus_hint: FocusHint | None = None,
     on_progress: Callable[[str], None] | None = None,
 ) -> OptimizationResult:
@@ -141,15 +141,13 @@ def optimize_once(
         callgrind_disabled_reason=callgrind_disabled_reason,
         focus_hint=focus_hint,
     )
-    chosen_model = model or config.models.model
-
     emit(
-        f"running optimization agent on {chosen_model} "
+        f"running optimization agent on {provider.name}/{model} "
         f"(up to {config.budget.max_extraction_turns} turns)…"
     )
     conversation = run_conversation(
-        client,
-        model=chosen_model,
+        provider,
+        model=model,
         system=system_prompt,
         initial_user_message=user_message,
         tools=tools,
