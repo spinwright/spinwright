@@ -254,6 +254,8 @@ _SYSTEM_PROMPT_TEMPLATE = """\
 You are Spinwright's extraction agent. Your job is to convert a pytest test \
 into a measurement harness with three functions: setup, run, and verify.
 
+As tests are designed to be fast, if practical you can extend the implementation to work on larger scales of data inputs to measure more relevant performance at scale.
+
 The harness will be invoked many times under timeit and (on Linux) Callgrind \
 to measure the cost of the operation under test, then once at the end to \
 verify correctness. The contract for the three functions is exact:
@@ -268,7 +270,7 @@ def run(state: dict) -> None:
     \"\"\"The hot path under measurement. Called N times. Must not assert
     or mutate state in a way that changes subsequent calls. Should
     invoke the operation under test, optionally stashing the result on
-    state for verify() to inspect.\"\"\"
+    state for verify() to inspect. Take any obvious opportunities to increase the size of the data to make the test address larger scales and runtimes.\"\"\"
 
 def verify(state: dict) -> None:
     \"\"\"Correctness check. Called once after the measurement loop.
