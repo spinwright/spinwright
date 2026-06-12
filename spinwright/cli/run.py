@@ -213,7 +213,7 @@ def run(
             regression=reg,
             extraction=meta,
             run_id=run_id,
-            model=model,
+            model=model_spec,  # PR notes record the full `provider/model` spec
             repo_dir=ws.repo_dir,
         )
         run_dir = run_log.write_run_directory(

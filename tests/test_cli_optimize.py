@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import copy
 import subprocess
 import sys
@@ -9,7 +8,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from spinwright.cli import optimize as cli_optimize
 from spinwright.repo.workspace import Workspace
 
 

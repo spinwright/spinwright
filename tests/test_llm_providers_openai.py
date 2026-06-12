@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any
 from unittest.mock import patch
 
-from spinwright.llm.providers import openai as openai_provider
 from spinwright.llm.providers.openai import (
     OpenAIProvider,
     _build_openai_messages,
