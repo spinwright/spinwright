@@ -121,17 +121,37 @@ def test_make_openai_missing_key_errors_clearly(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_make_ollama_does_not_require_key(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+def test_make_ollama_cloud_default_requires_key(monkeypatch):
+    """Ollama Cloud is the default endpoint and needs OLLAMA_API_KEY. Missing
+    it gives the user a clear, actionable error — the alternative is a 401
+    several seconds into the first API call."""
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
     monkeypatch.delenv("OLLAMA_HOST", raising=False)
-    # OllamaProvider doesn't exist yet (step 6); just confirm the factory
-    # routes there and tries to instantiate it — the ImportError surfaces
-    # cleanly when the file lands.
-    try:
-        provider, model_id = make_provider("ollama/llama3.1:8b")
-    except (ModuleNotFoundError, ImportError):
-        # Acceptable until step 6 — confirms we DID route to ollama (not
-        # erroring on the API-key check first).
-        return
+    with pytest.raises(MissingAPIKeyError, match="OLLAMA_API_KEY"):
+        make_provider("ollama/llama3.1:8b")
+
+
+def test_make_ollama_self_hosted_no_key_needed(monkeypatch):
+    """When OLLAMA_HOST overrides the cloud default, the factory treats it as
+    "user picked an endpoint that doesn't need auth" and skips the key check."""
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
+    provider, model_id = make_provider("ollama/llama3.1:8b")
     assert provider.name == "ollama"
     assert model_id == "llama3.1:8b"
+
+
+def test_make_ollama_cloud_with_key(monkeypatch):
+    monkeypatch.setenv("OLLAMA_API_KEY", "ollama-cloud-token")
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    provider, model_id = make_provider("ollama/llama3.1:8b")
+    assert provider.name == "ollama"
+    assert model_id == "llama3.1:8b"
+
+
+def test_make_ollama_explicit_key_argument_overrides_env(monkeypatch):
+    """Explicit ``api_key=`` short-circuits the env-var check entirely."""
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    provider, _ = make_provider("ollama/llama3.1:8b", api_key="explicit-key")
+    assert provider.name == "ollama"

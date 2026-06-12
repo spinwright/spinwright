@@ -95,7 +95,11 @@ def make_provider(
 
       * anthropic → ``ANTHROPIC_API_KEY``
       * openai    → ``OPENAI_API_KEY``
-      * ollama    → no key required; ``OLLAMA_HOST`` honored as base URL
+      * ollama    → ``OLLAMA_API_KEY`` (required when targeting Ollama Cloud,
+                    which is the default). When ``OLLAMA_HOST`` is set to a
+                    self-hosted endpoint, the key is optional — the factory
+                    treats explicit-host as "user picked a target that
+                    doesn't need auth" and skips the eager check.
 
     Raises ``MissingAPIKeyError`` (the provider needs a key and none was found)
     or ``AmbiguousModelSpecError`` (the spec can't be routed).
@@ -129,11 +133,22 @@ def make_provider(
         return OpenAIProvider(api_key=key), resolved.model_id
 
     if resolved.provider_name == "ollama":
-        # Ollama doesn't require an API key — base URL is configurable via
-        # OLLAMA_HOST (the provider reads it).
+        # Ollama defaults to the hosted cloud (https://ollama.com), which
+        # requires OLLAMA_API_KEY. If the user has overridden the host —
+        # presumably pointing at a self-hosted server — we treat that as an
+        # explicit "I know what I'm doing" signal and let the key be empty;
+        # the provider sends a sentinel value the local server ignores.
+        key = api_key or os.environ.get("OLLAMA_API_KEY")
+        host_explicit = bool(os.environ.get("OLLAMA_HOST"))
+        if not key and not host_explicit:
+            raise MissingAPIKeyError(
+                "ollama defaults to Ollama Cloud (https://ollama.com) which "
+                "requires an API key — set OLLAMA_API_KEY, or set "
+                "OLLAMA_HOST to a self-hosted endpoint that doesn't need auth."
+            )
         from spinwright.llm.providers.ollama import OllamaProvider
 
-        return OllamaProvider(api_key=api_key), resolved.model_id
+        return OllamaProvider(api_key=key), resolved.model_id
 
     # Unreachable — parse_spec only returns known providers, but keep the
     # branch so a future provider can't silently fall through.
