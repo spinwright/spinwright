@@ -43,7 +43,6 @@ on:
         description: "Model spec (e.g. anthropic/claude-opus-4-7, openai/gpt-4o, ollama/llama3.1:8b). Blank = config default."
         required: false
         default: ""
-
 jobs:
   optimize:
     uses: spinwright/spinwright/.github/workflows/optimize.yml@main
@@ -53,11 +52,13 @@ jobs:
       requirements: ${{ inputs.requirements }}
       extras:       ${{ inputs.extras }}
       model:        ${{ inputs.model }}
+      ollama_host:  ${{ inputs.ollama_host }}
       # Remove this line once `pip install spinwright` works.
       spinwright_install_spec: 'git+https://github.com/spinwright/spinwright.git@main'
     secrets:
-      # Forward both — the reusable workflow accepts either. The one matching
-      # your chosen model must be set as a repository secret. Ollama needs
-      # neither (it runs against localhost on the runner).
+      # Forward all three. Only the one matching your chosen model must be
+      # set as a repository secret. Local Ollama (default) needs none —
+      # hosted Ollama needs OLLAMA_API_KEY plus an `ollama_host` input.
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}

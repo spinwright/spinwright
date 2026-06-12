@@ -70,6 +70,15 @@ on:
         required: false
         default: "3.14"
         description: "Python version for the workspace's venv."
+      ollama_host:
+        type: string
+        required: false
+        default: ""
+        description: |
+          Base URL for the Ollama openai-compat endpoint. Only honored when
+          model uses `ollama/`. Blank ⇒ Ollama Cloud (`https://ollama.com`,
+          the default). Set to a self-hosted URL like `http://10.0.0.5:11434`
+          to route there instead.
     secrets:
       ANTHROPIC_API_KEY:
         required: false
@@ -77,6 +86,9 @@ on:
       OPENAI_API_KEY:
         required: false
         description: "OpenAI API key (required when model uses openai/)."
+      OLLAMA_API_KEY:
+        required: false
+        description: "Ollama API key (required for hosted Ollama; ignored locally)."
 
 permissions:
   contents: write
@@ -162,11 +174,13 @@ jobs:
 
       - name: Extract harness
         env:
-          # Set BOTH; spinwright reads whichever its model spec needs.
+          # Set all keys; spinwright reads whichever its model spec needs.
           # Empty values are harmless — make_provider only complains if the
           # required env var is missing AND no model override was supplied.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          OLLAMA_HOST: ${{ inputs.ollama_host }}
         run: |
           EXTRACT_ARGS=(
             "${{ steps.prep.outputs.ws }}"
@@ -189,6 +203,8 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          OLLAMA_HOST: ${{ inputs.ollama_host }}
           # Stream Python stdout/stderr unbuffered so loop/agent progress shows
           # up live in the step log instead of all at once when the step ends.
           PYTHONUNBUFFERED: "1"

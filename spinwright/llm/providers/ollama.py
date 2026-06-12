@@ -1,15 +1,25 @@
 """Ollama via the openai-compat endpoint.
 
-Recent Ollama (≥0.4) exposes ``$OLLAMA_HOST/v1/chat/completions`` that speaks
-the OpenAI Chat Completions wire format, including tool calling on models
-that support it (``llama3.1:8b``, ``qwen2.5:7b``, etc.). We reuse
-``OpenAIProvider`` and only override the base URL — the conversion logic
-between Anthropic-style content blocks and openai-compat shapes is the same.
+Default target is **Ollama's hosted cloud** (``https://ollama.com``) — that's
+the typical deployment now and matches the convention documented at
+https://docs.ollama.com/cloud . Authenticate by setting ``OLLAMA_API_KEY``.
 
-API key: Ollama doesn't require one for local servers, but the openai SDK
-demands a non-empty ``api_key`` string. We pass a sentinel; the server
-ignores it. ``OLLAMA_API_KEY`` (if set) overrides the sentinel for users
-running Ollama behind an auth proxy.
+To run against a self-hosted server instead, set ``OLLAMA_HOST`` to its
+base URL (e.g. ``http://localhost:11434``); local servers don't check the
+auth header so ``OLLAMA_API_KEY`` can stay unset (we send a sentinel string
+in that case so the openai SDK doesn't refuse an empty key).
+
+Wire protocol: ``$OLLAMA_HOST/v1/chat/completions`` — the OpenAI Chat
+Completions wire format, including tool calling on capable models
+(``llama3.1:8b``, ``qwen2.5:7b``, …). We reuse ``OpenAIProvider`` and only
+override the base URL — the conversion between Anthropic-style content
+blocks and openai-compat shapes is identical for both targets.
+
+Env vars:
+    OLLAMA_HOST     Base URL of the server. Default ``https://ollama.com``.
+                    Trailing ``/`` and a ``/v1`` suffix are both normalized.
+    OLLAMA_API_KEY  Bearer token. Required for hosted Ollama; ignored on
+                    local self-hosted (they don't check it).
 """
 
 from __future__ import annotations
@@ -19,7 +29,7 @@ import os
 from spinwright.llm.providers.openai import OpenAIProvider
 
 
-_DEFAULT_OLLAMA_HOST = "http://localhost:11434"
+_DEFAULT_OLLAMA_HOST = "https://ollama.com"
 _SENTINEL_KEY = "ollama"  # The openai SDK requires a non-empty string.
 
 

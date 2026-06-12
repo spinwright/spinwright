@@ -5,8 +5,15 @@ from unittest.mock import patch
 from spinwright.llm.providers.ollama import OllamaProvider, _ollama_base_url
 
 
-def test_default_base_url(monkeypatch):
+def test_default_base_url_targets_ollama_cloud(monkeypatch):
+    """Default routes to Ollama Cloud per docs.ollama.com/cloud — the typical
+    deployment. Users on self-hosted servers override via OLLAMA_HOST."""
     monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    assert _ollama_base_url() == "https://ollama.com/v1"
+
+
+def test_local_self_hosted_via_env_override(monkeypatch):
+    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
     assert _ollama_base_url() == "http://localhost:11434/v1"
 
 

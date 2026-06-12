@@ -101,7 +101,7 @@ spinwright/
   |---|---|---|
   | `anthropic/<model_id>` | Anthropic SDK | `anthropic/claude-opus-4-7` |
   | `openai/<model_id>` | OpenAI Chat Completions API | `openai/gpt-4o` |
-  | `ollama/<model_id>` | Ollama via openai-compat (`$OLLAMA_HOST/v1`) | `ollama/llama3.1:8b` |
+  | `ollama/<model_id>` | Ollama via openai-compat (`$OLLAMA_HOST/v1`; default Ollama Cloud at `https://ollama.com`) | `ollama/llama3.1:8b` |
   | bare `claude-*` | anthropic (heuristic) | `claude-opus-4-7` |
   | bare `gpt-*` / `o[1-9]-*` | openai (heuristic) | `gpt-4o`, `o4-mini` |
   | anything else | error: ambiguous — use `provider/model` | — |
@@ -112,7 +112,7 @@ spinwright/
   |---|---|---|
   | anthropic | `ANTHROPIC_API_KEY` | yes |
   | openai | `OPENAI_API_KEY` | yes |
-  | ollama | none (`OLLAMA_HOST` honored for non-default base URL; `OLLAMA_API_KEY` honored for auth proxies) | no |
+  | ollama | `OLLAMA_API_KEY` (Ollama Cloud — default); `OLLAMA_HOST` to switch to a self-hosted server (which doesn't need a key) | for cloud, yes |
 
 - **Provider abstraction.** All providers normalize requests/responses to Anthropic-style content-block shape internally (`{type:"text"}` / `{type:"tool_use"}` blocks, `stop_reason` vocabulary, `input_tokens`/`output_tokens` usage fields). The dispatch loop stays provider-agnostic; only the network call at the inner-loop boundary differs.
 
@@ -490,9 +490,10 @@ A standalone non-reusable variant is intentionally not shipped — anyone who wa
 
 - `ANTHROPIC_API_KEY` — required when the chosen `model` uses the `anthropic/` provider (or a bare `claude-*` name that routes there). Used by the `extract` and `run` steps.
 - `OPENAI_API_KEY` — required when the chosen `model` uses the `openai/` provider (or a bare `gpt-*`/`o[1-9]-*` name that routes there).
+- `OLLAMA_API_KEY` — required when the chosen `model` uses the `ollama/` provider against the default Ollama Cloud endpoint. **Not** required when `ollama_host` overrides the base URL to a self-hosted server.
 - `GITHUB_TOKEN` — auto-provided by Actions; used by the workflow to push the branch and open the PR.
 
-Both API-key secrets are forwarded to the reusable workflow unconditionally; the workflow's bash sets BOTH env vars (one will be empty) and spinwright reads whichever the model spec needs. If the wrong one is empty, `make_provider` raises with a clear message naming the env var that's missing. Ollama models (`ollama/...`) need no API key — the model runs on the runner against `localhost:11434` (or `$OLLAMA_HOST`).
+All three API-key secrets are forwarded to the reusable workflow unconditionally; the workflow's bash sets all three env vars (the unused ones are empty) and spinwright reads whichever the model spec needs. If the matching one is empty when the spec demands it, `make_provider` raises with a clear message naming the env var that's missing. For Ollama specifically: the provider defaults to Ollama Cloud (`https://ollama.com`); set `ollama_host` to a self-hosted base URL (e.g. `http://10.0.0.5:11434`) to point at a self-managed server instead.
 
 ### 12.2 Workflow inputs
 
@@ -503,7 +504,8 @@ Both API-key secrets are forwarded to the reusable workflow unconditionally; the
 | `requirements` | no | Repo-relative path to a test/dev requirements file, passed to `spinwright prep --requirements`. |
 | `extras` | no | Comma-separated optional extras for the editable install. |
 | `skip_regression` | no | Boolean; default **`true`**. The post-loop full pytest suite is skipped by default in CI because it tends to be slow and sometimes flaky (network-dependent tests, large fixtures); regression value is highest run by humans on a clean dev box. Set to `false` to enable. |
-| `model` | no | Model spec (e.g. `anthropic/claude-opus-4-7`, `openai/gpt-4o`, `ollama/llama3.1:8b`). Blank ⇒ falls back to whatever `[models] model` in `spinwright.toml` says. The matching API-key secret must be set on the calling repo for `anthropic/` or `openai/`; Ollama needs no secret. |
+| `model` | no | Model spec (e.g. `anthropic/claude-opus-4-7`, `openai/gpt-4o`, `ollama/llama3.1:8b`). Blank ⇒ falls back to whatever `[models] model` in `spinwright.toml` says. The matching API-key secret must be set on the calling repo for `anthropic/` or `openai/` (and for hosted `ollama/`). |
+| `ollama_host` | no | Base URL for Ollama's openai-compat endpoint. Only honored with `ollama/` models. Blank ⇒ **Ollama Cloud** at `https://ollama.com` (the default; needs `OLLAMA_API_KEY`). Set to a self-hosted URL like `http://10.0.0.5:11434` to point at a self-managed server (no key required). |
 
 ### 12.3 Pipeline structure
 
