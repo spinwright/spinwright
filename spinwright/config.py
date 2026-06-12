@@ -55,9 +55,7 @@ class BudgetConfig:
 @dataclass(frozen=True)
 class ModelConfig:
     # The single model used for all LLM agent work (extraction + optimization).
-    # Overridable per-invocation via the CLI ``--model`` flag. Anthropic ids
-    # work today; this is the seam where OpenAI/Ollama provider routing will be
-    # added (e.g. a future ``provider`` / ``base_url`` field alongside it).
+    # Overridable per-invocation via the CLI ``--model`` flag.
     model: str = "claude-opus-4-7"
 
 

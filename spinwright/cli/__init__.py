@@ -170,6 +170,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip the full-suite regression check at the end of the loop.",
     )
     p_run.add_argument(
+        "--test-path",
+        action="append",
+        default=[],
+        metavar="REPO_RELATIVE_PATH",
+        help=(
+            "Constrain the regression check's pytest invocation to a subset "
+            "of the test tree (repeatable). Passed as positional pytest args, "
+            "so anything pytest accepts works (a directory, a single file, a "
+            "specific nodeid). Ignored when --skip-regression is set."
+        ),
+    )
+    p_run.add_argument(
         "--no-pr",
         action="store_true",
         help="Skip the PR assembly + publish step (still writes the run directory).",

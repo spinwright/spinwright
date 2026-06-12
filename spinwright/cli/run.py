@@ -188,6 +188,11 @@ def run(
                 if loop_result.iterations[i].commit_sha
             ],
             venv_python=venv_mod.python_executable(ws),
+            # --test-path values are passed as positional pytest args, so
+            # `--test-path static_frame/test/unit` becomes `pytest ...
+            # static_frame/test/unit`. Empty list ⇒ full suite (today's
+            # behavior).
+            pytest_args=tuple(args.test_path),
         )
         _print_regression_summary(reg)
 

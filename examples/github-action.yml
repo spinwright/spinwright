@@ -28,7 +28,7 @@ on:
         required: false
         default: ""
       test_path:
-        description: "Constrain auto-selection to this repo-relative path"
+        description: "Repo-relative test subset (e.g. static_frame/test/unit). Scopes both auto-selection AND the post-loop regression check."
         required: false
         default: ""
       requirements:

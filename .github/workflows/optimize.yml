@@ -28,7 +28,13 @@ on:
         type: string
         required: false
         default: ""
-        description: "Constrain auto-selection to this repo-relative path."
+        description: |
+          Repo-relative test-tree subset (e.g. ``static_frame/test/unit``).
+          Used as a positional pytest arg in two places: (1) the candidates
+          step that auto-picks a nodeid, and (2) the post-loop regression
+          check (ignored when ``skip_regression`` is true). A single input
+          scopes both ends of the pipeline so they agree on which tests
+          matter.
       requirements:
         type: string
         required: false
@@ -217,6 +223,12 @@ jobs:
           )
           if [ -n "${{ inputs.model }}" ]; then
             RUN_ARGS+=(--model "${{ inputs.model }}")
+          fi
+          # Same test_path that scoped candidate auto-selection earlier in
+          # the workflow also scopes the regression check, so a single input
+          # constrains both ends of the pipeline.
+          if [ -n "${{ inputs.test_path }}" ]; then
+            RUN_ARGS+=(--test-path "${{ inputs.test_path }}")
           fi
           # Boolean workflow_call inputs expand to the literal strings
           # "true" / "false" in bash; quote and compare as strings.
