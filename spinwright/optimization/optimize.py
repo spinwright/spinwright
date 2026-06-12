@@ -470,9 +470,7 @@ def _format_tools_section(tools: list[ToolDefinition]) -> str:
     sees — and adding a tool no longer requires a prose update."""
     if not tools:
         return "(none)"
-    return "\n".join(
-        f"- `{t.name}` — {' '.join(t.description.split())}" for t in tools
-    )
+    return "\n".join(f"- `{t.name}` — {' '.join(t.description.split())}" for t in tools)
 
 
 def _build_user_message(
