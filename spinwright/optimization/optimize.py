@@ -370,10 +370,6 @@ def _relative_callgrind_improvement(
     return (baseline.instructions - candidate.instructions) / baseline.instructions
 
 
-# Backwards-compat alias for tests written against M2.3.
-_relative_improvement = _relative_walltime_improvement
-
-
 def _metric_label(gate_metric: str) -> str:
     return {
         "callgrind_instructions": "Callgrind instructions",

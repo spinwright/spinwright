@@ -220,9 +220,13 @@ def _wt(median: float) -> WalltimeResult:
 def test_relative_improvement_basic():
     import pytest as _pt
 
-    assert optimize._relative_improvement(_wt(1.0), _wt(0.8)) == _pt.approx(0.2)
-    assert optimize._relative_improvement(_wt(1.0), _wt(2.0)) == _pt.approx(-1.0)
-    assert optimize._relative_improvement(_wt(0.0), _wt(0.5)) is None
+    assert optimize._relative_walltime_improvement(_wt(1.0), _wt(0.8)) == _pt.approx(
+        0.2
+    )
+    assert optimize._relative_walltime_improvement(_wt(1.0), _wt(2.0)) == _pt.approx(
+        -1.0
+    )
+    assert optimize._relative_walltime_improvement(_wt(0.0), _wt(0.5)) is None
 
 
 def test_diff_paths_parses_diff_git_lines(tmp_path: Path):
