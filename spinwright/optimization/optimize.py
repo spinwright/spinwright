@@ -7,7 +7,7 @@ from typing import Callable
 from spinwright import platform as platform_mod
 from spinwright.config import Config
 from spinwright.llm.providers.base import Provider
-from spinwright.llm.dispatch import ConversationResult, run_conversation
+from spinwright.llm.dispatch import ConversationResult, ToolDefinition, run_conversation
 from spinwright.measurement import callgrind as callgrind_mod
 from spinwright.measurement import walltime
 from spinwright.measurement.runner import DriverError
@@ -133,6 +133,7 @@ def optimize_once(
         threshold=threshold,
         primary_metric=primary_metric,
         focus_hint=focus_hint,
+        tools=tools,
     )
     user_message = _build_user_message(
         extraction_path=extraction_path,
@@ -409,19 +410,8 @@ primary metric on this run is {primary_metric_label}; to be accepted, your
 patch must reduce it by at least {threshold:.0%} without breaking verify().
 ({callgrind_note})
 
-Tools available:
-- `profile_cprofile` — get hot functions. Default scope is target-repo
-  functions only (stdlib, NumPy, etc. are filtered out automatically); pass
-  `include_external=true` if you specifically need to see one of those.
-  Default sort: cumtime.
-- `read_source` — look at the source of any dotted qualname.
-- `edit_file` — string-replace edit in a workspace file. old_string must
-  match exactly once; include surrounding context if needed.
-- `write_file` — overwrite a workspace file. Avoid unless rewriting.
-- `run_python` — sanity-check your edit by importing the extraction and
-  running setup → run → verify once.
-- `git_diff` — see your current uncommitted changes.
-- `git_revert_path` / `git_revert_all` — undo if you change your mind.
+Tools available (each tool's full JSON Schema is sent alongside this prompt):
+{tools_section}
 
 Rules:
 - Pure-Python edits only. No new C extensions, no Cython, no Rust. Swapping
@@ -446,6 +436,7 @@ def _build_system_prompt(
     threshold: float,
     primary_metric: str,
     focus_hint: FocusHint | None,
+    tools: list[ToolDefinition],
 ) -> str:
     label = _metric_label(primary_metric)
     note = (
@@ -459,6 +450,7 @@ def _build_system_prompt(
         threshold=threshold,
         primary_metric_label=label,
         callgrind_note=note,
+        tools_section=_format_tools_section(tools),
     )
     if focus_hint is not None:
         base += (
@@ -469,6 +461,18 @@ def _build_system_prompt(
             "final summary."
         )
     return base
+
+
+def _format_tools_section(tools: list[ToolDefinition]) -> str:
+    """Render the agent-visible tool list from the registry. Keeping prompt and
+    schema in lockstep means description edits land in one place (the registry)
+    rather than drifting between the prose here and the JSON schemas the model
+    sees — and adding a tool no longer requires a prose update."""
+    if not tools:
+        return "(none)"
+    return "\n".join(
+        f"- `{t.name}` — {' '.join(t.description.split())}" for t in tools
+    )
 
 
 def _build_user_message(
