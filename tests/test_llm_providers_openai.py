@@ -25,7 +25,10 @@ def test_tools_converted_to_openai_function_shape():
         {
             "name": "profile_cprofile",
             "description": "Profile run().",
-            "input_schema": {"type": "object", "properties": {"limit": {"type": "integer"}}},
+            "input_schema": {
+                "type": "object",
+                "properties": {"limit": {"type": "integer"}},
+            },
         }
     ]
     oa = _build_openai_tools(anth)
@@ -35,7 +38,10 @@ def test_tools_converted_to_openai_function_shape():
             "function": {
                 "name": "profile_cprofile",
                 "description": "Profile run().",
-                "parameters": {"type": "object", "properties": {"limit": {"type": "integer"}}},
+                "parameters": {
+                    "type": "object",
+                    "properties": {"limit": {"type": "integer"}},
+                },
             },
         }
     ]
@@ -44,10 +50,14 @@ def test_tools_converted_to_openai_function_shape():
 def test_tool_cache_control_marker_stripped():
     """The orchestrator may attach cache_control to tools when targeting
     Anthropic; non-Anthropic providers silently drop the marker."""
-    anth = [{
-        "name": "t", "description": "d", "input_schema": {"type": "object"},
-        "cache_control": {"type": "ephemeral"},
-    }]
+    anth = [
+        {
+            "name": "t",
+            "description": "d",
+            "input_schema": {"type": "object"},
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
     oa = _build_openai_tools(anth)
     assert "cache_control" not in oa[0]
     assert "cache_control" not in oa[0]["function"]
@@ -76,24 +86,42 @@ def test_anthropic_system_block_list_with_cache_control_unwraps():
 def test_tool_result_user_message_becomes_role_tool():
     anth_messages = [
         {"role": "user", "content": "go"},
-        {"role": "assistant", "content": [{"type": "tool_use", "id": "tu_1",
-                                            "name": "p", "input": {"x": 1}}]},
-        {"role": "user", "content": [
-            {"type": "tool_result", "tool_use_id": "tu_1", "content": "result body"}
-        ]},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "tool_use", "id": "tu_1", "name": "p", "input": {"x": 1}}
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                {"type": "tool_result", "tool_use_id": "tu_1", "content": "result body"}
+            ],
+        },
     ]
     msgs = _build_openai_messages("sys", anth_messages)
     # system + user + assistant + tool (no wrapping user role)
     assert [m["role"] for m in msgs] == ["system", "user", "assistant", "tool"]
-    assert msgs[-1] == {"role": "tool", "tool_call_id": "tu_1", "content": "result body"}
+    assert msgs[-1] == {
+        "role": "tool",
+        "tool_call_id": "tu_1",
+        "content": "result body",
+    }
 
 
 def test_tool_result_with_is_error_prefixes_content():
     anth_messages = [
-        {"role": "user", "content": [
-            {"type": "tool_result", "tool_use_id": "tu_2",
-             "content": "ValueError: nope", "is_error": True}
-        ]},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "tu_2",
+                    "content": "ValueError: nope",
+                    "is_error": True,
+                }
+            ],
+        },
     ]
     msgs = _build_openai_messages("sys", anth_messages)
     assert msgs[-1]["content"].startswith("[error]")
@@ -102,10 +130,18 @@ def test_tool_result_with_is_error_prefixes_content():
 
 def test_assistant_blocks_split_into_content_plus_tool_calls():
     anth_messages = [
-        {"role": "assistant", "content": [
-            {"type": "text", "text": "ok let me check"},
-            {"type": "tool_use", "id": "tu_1", "name": "profile", "input": {"limit": 5}},
-        ]},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "ok let me check"},
+                {
+                    "type": "tool_use",
+                    "id": "tu_1",
+                    "name": "profile",
+                    "input": {"limit": 5},
+                },
+            ],
+        },
     ]
     msgs = _build_openai_messages("sys", anth_messages)
     asst = msgs[-1]
@@ -120,9 +156,12 @@ def test_assistant_blocks_split_into_content_plus_tool_calls():
 
 
 def test_assistant_text_only_yields_no_tool_calls_field():
-    msgs = _build_openai_messages("sys", [
-        {"role": "assistant", "content": [{"type": "text", "text": "hi"}]},
-    ])
+    msgs = _build_openai_messages(
+        "sys",
+        [
+            {"role": "assistant", "content": [{"type": "text", "text": "hi"}]},
+        ],
+    )
     asst = msgs[-1]
     assert asst["content"] == "hi"
     assert "tool_calls" not in asst
@@ -172,10 +211,12 @@ class FakeOpenAIResponse:
 
 def test_unmarshal_simple_text_response():
     response = FakeOpenAIResponse(
-        choices=[FakeChoice(
-            message=FakeOpenAIMessage(content="hello world", tool_calls=[]),
-            finish_reason="stop",
-        )],
+        choices=[
+            FakeChoice(
+                message=FakeOpenAIMessage(content="hello world", tool_calls=[]),
+                finish_reason="stop",
+            )
+        ],
         usage=FakeOpenAIUsage(prompt_tokens=10, completion_tokens=3),
     )
     pr = _unmarshal_response(response)
@@ -186,16 +227,22 @@ def test_unmarshal_simple_text_response():
 
 def test_unmarshal_tool_calls_split_into_blocks():
     response = FakeOpenAIResponse(
-        choices=[FakeChoice(
-            message=FakeOpenAIMessage(
-                content="let me check",
-                tool_calls=[FakeToolCall(
-                    id="tu_1",
-                    function=FakeFunctionCall(name="profile", arguments='{"limit": 5}'),
-                )],
-            ),
-            finish_reason="tool_calls",
-        )],
+        choices=[
+            FakeChoice(
+                message=FakeOpenAIMessage(
+                    content="let me check",
+                    tool_calls=[
+                        FakeToolCall(
+                            id="tu_1",
+                            function=FakeFunctionCall(
+                                name="profile", arguments='{"limit": 5}'
+                            ),
+                        )
+                    ],
+                ),
+                finish_reason="tool_calls",
+            )
+        ],
     )
     pr = _unmarshal_response(response)
     assert pr.stop_reason == "tool_use"
@@ -206,14 +253,20 @@ def test_unmarshal_tool_calls_split_into_blocks():
 
 
 def test_unmarshal_finish_reason_normalized():
-    cases = {"stop": "end_turn", "tool_calls": "tool_use",
-             "length": "max_tokens", "content_filter": "refusal"}
+    cases = {
+        "stop": "end_turn",
+        "tool_calls": "tool_use",
+        "length": "max_tokens",
+        "content_filter": "refusal",
+    }
     for raw, normalized in cases.items():
         response = FakeOpenAIResponse(
-            choices=[FakeChoice(
-                message=FakeOpenAIMessage(content="x", tool_calls=[]),
-                finish_reason=raw,
-            )],
+            choices=[
+                FakeChoice(
+                    message=FakeOpenAIMessage(content="x", tool_calls=[]),
+                    finish_reason=raw,
+                )
+            ],
         )
         assert _unmarshal_response(response).stop_reason == normalized
 
@@ -223,16 +276,20 @@ def test_unmarshal_implicit_tool_use_overrides_finish_reason():
     if we see tool blocks the actual stop_reason has to be tool_use or the
     dispatch loop will exit prematurely without executing the call."""
     response = FakeOpenAIResponse(
-        choices=[FakeChoice(
-            message=FakeOpenAIMessage(
-                content=None,
-                tool_calls=[FakeToolCall(
-                    id="tu_1",
-                    function=FakeFunctionCall(name="t", arguments="{}"),
-                )],
-            ),
-            finish_reason="stop",  # wrong — server bug
-        )],
+        choices=[
+            FakeChoice(
+                message=FakeOpenAIMessage(
+                    content=None,
+                    tool_calls=[
+                        FakeToolCall(
+                            id="tu_1",
+                            function=FakeFunctionCall(name="t", arguments="{}"),
+                        )
+                    ],
+                ),
+                finish_reason="stop",  # wrong — server bug
+            )
+        ],
     )
     pr = _unmarshal_response(response)
     assert pr.stop_reason == "tool_use"
@@ -240,16 +297,20 @@ def test_unmarshal_implicit_tool_use_overrides_finish_reason():
 
 def test_unmarshal_invalid_json_arguments_recovers():
     response = FakeOpenAIResponse(
-        choices=[FakeChoice(
-            message=FakeOpenAIMessage(
-                content=None,
-                tool_calls=[FakeToolCall(
-                    id="tu_1",
-                    function=FakeFunctionCall(name="t", arguments="{not json"),
-                )],
-            ),
-            finish_reason="tool_calls",
-        )],
+        choices=[
+            FakeChoice(
+                message=FakeOpenAIMessage(
+                    content=None,
+                    tool_calls=[
+                        FakeToolCall(
+                            id="tu_1",
+                            function=FakeFunctionCall(name="t", arguments="{not json"),
+                        )
+                    ],
+                ),
+                finish_reason="tool_calls",
+            )
+        ],
     )
     pr = _unmarshal_response(response)
     assert pr.content[0]["input"]["_raw_arguments"] == "{not json"
@@ -257,13 +318,18 @@ def test_unmarshal_invalid_json_arguments_recovers():
 
 def test_unmarshal_usage_handles_missing():
     response = FakeOpenAIResponse(
-        choices=[FakeChoice(
-            message=FakeOpenAIMessage(content="ok", tool_calls=[]),
-            finish_reason="stop",
-        )],
+        choices=[
+            FakeChoice(
+                message=FakeOpenAIMessage(content="ok", tool_calls=[]),
+                finish_reason="stop",
+            )
+        ],
         usage=FakeOpenAIUsage(),
     )
-    assert _unmarshal_response(response).usage == {"input_tokens": 0, "output_tokens": 0}
+    assert _unmarshal_response(response).usage == {
+        "input_tokens": 0,
+        "output_tokens": 0,
+    }
 
 
 def test_unmarshal_usage_none():
@@ -297,10 +363,12 @@ class FakeOpenAISDKClient:
 
 def test_create_message_round_trip(monkeypatch):
     response = FakeOpenAIResponse(
-        choices=[FakeChoice(
-            message=FakeOpenAIMessage(content="round-trip", tool_calls=[]),
-            finish_reason="stop",
-        )],
+        choices=[
+            FakeChoice(
+                message=FakeOpenAIMessage(content="round-trip", tool_calls=[]),
+                finish_reason="stop",
+            )
+        ],
         usage=FakeOpenAIUsage(prompt_tokens=5, completion_tokens=2),
     )
     fake_sdk = FakeOpenAISDKClient(response)
@@ -310,8 +378,13 @@ def test_create_message_round_trip(monkeypatch):
         model="gpt-4o",
         system="sys text",
         messages=[{"role": "user", "content": "hello"}],
-        tools=[{"name": "t", "description": "d",
-                "input_schema": {"type": "object", "properties": {}}}],
+        tools=[
+            {
+                "name": "t",
+                "description": "d",
+                "input_schema": {"type": "object", "properties": {}},
+            }
+        ],
         max_tokens=512,
         cache_static_prefix=True,
     )

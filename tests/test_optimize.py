@@ -93,16 +93,23 @@ class FakeProvider:
 
     def create_message(self, **kwargs):
         from spinwright.llm.providers.base import ProviderResponse
+
         self.messages.calls.append(copy.deepcopy(kwargs))
         if not self.messages.responses:
             raise AssertionError("no fake response queued for this call")
         fake = self.messages.responses.pop(0)
         content = [b.model_dump() for b in fake.content]
-        usage = fake.usage.model_dump() if hasattr(fake.usage, "model_dump") else (fake.usage or {})
-        return ProviderResponse(content=content, stop_reason=fake.stop_reason, usage=usage)
+        usage = (
+            fake.usage.model_dump()
+            if hasattr(fake.usage, "model_dump")
+            else (fake.usage or {})
+        )
+        return ProviderResponse(
+            content=content, stop_reason=fake.stop_reason, usage=usage
+        )
 
 
-FakeClient = FakeProvider   # backwards-compat alias for older test bodies
+FakeClient = FakeProvider  # backwards-compat alias for older test bodies
 
 
 # ---------------------------------------------------------------------------

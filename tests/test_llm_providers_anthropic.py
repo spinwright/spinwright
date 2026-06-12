@@ -30,7 +30,12 @@ class FakeToolUse:
     type: str = "tool_use"
 
     def model_dump(self, *, exclude_none: bool = True) -> dict:
-        return {"type": "tool_use", "id": self.id, "name": self.name, "input": self.input}
+        return {
+            "type": "tool_use",
+            "id": self.id,
+            "name": self.name,
+            "input": self.input,
+        }
 
 
 @dataclass
@@ -92,7 +97,9 @@ def test_passes_request_through_unchanged():
     p, fake = _provider_with(fake_response)
     result = p.create_message(
         model="claude-opus-4-7",
-        system=[{"type": "text", "text": "sys", "cache_control": {"type": "ephemeral"}}],
+        system=[
+            {"type": "text", "text": "sys", "cache_control": {"type": "ephemeral"}}
+        ],
         messages=[{"role": "user", "content": "hi"}],
         tools=[{"name": "t", "description": "d", "input_schema": {"type": "object"}}],
         max_tokens=1024,
@@ -139,7 +146,7 @@ def test_unmarshals_content_and_usage_to_anthropic_shape():
 def test_unknown_stop_reason_falls_back_to_string():
     fake_response = FakeMessage(
         content=[FakeText(text="?")],
-        stop_reason=None,        # SDK occasionally returns None
+        stop_reason=None,  # SDK occasionally returns None
         usage=FakeUsage(),
     )
     p, _ = _provider_with(fake_response)
@@ -156,6 +163,8 @@ def test_unknown_stop_reason_falls_back_to_string():
 
 def test_name_attribute_for_routing():
     p, _ = _provider_with(
-        FakeMessage(content=[FakeText(text="x")], stop_reason="end_turn", usage=FakeUsage())
+        FakeMessage(
+            content=[FakeText(text="x")], stop_reason="end_turn", usage=FakeUsage()
+        )
     )
     assert p.name == "anthropic"

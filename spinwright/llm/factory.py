@@ -29,8 +29,8 @@ class AmbiguousModelSpecError(ValueError):
 
 @dataclass(frozen=True)
 class ResolvedSpec:
-    provider_name: str   # "anthropic" | "openai" | "ollama"
-    model_id: str        # The string passed to the upstream API
+    provider_name: str  # "anthropic" | "openai" | "ollama"
+    model_id: str  # The string passed to the upstream API
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +114,7 @@ def make_provider(
                 "set ANTHROPIC_API_KEY or pass api_key=..."
             )
         from spinwright.llm.providers.anthropic import AnthropicProvider
+
         return AnthropicProvider(api_key=key), resolved.model_id
 
     if resolved.provider_name == "openai":
@@ -124,12 +125,14 @@ def make_provider(
                 "set OPENAI_API_KEY or pass api_key=..."
             )
         from spinwright.llm.providers.openai import OpenAIProvider
+
         return OpenAIProvider(api_key=key), resolved.model_id
 
     if resolved.provider_name == "ollama":
         # Ollama doesn't require an API key — base URL is configurable via
         # OLLAMA_HOST (the provider reads it).
         from spinwright.llm.providers.ollama import OllamaProvider
+
         return OllamaProvider(api_key=api_key), resolved.model_id
 
     # Unreachable — parse_spec only returns known providers, but keep the

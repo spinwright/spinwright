@@ -38,7 +38,7 @@ _STOP_REASON_MAP = {
     "tool_calls": "tool_use",
     "length": "max_tokens",
     "content_filter": "refusal",
-    "function_call": "tool_use",   # legacy field; we don't emit but be safe
+    "function_call": "tool_use",  # legacy field; we don't emit but be safe
 }
 
 
@@ -80,7 +80,8 @@ class OpenAIProvider:
 
 
 def _build_openai_messages(
-    system: str | list[dict], messages: list[dict],
+    system: str | list[dict],
+    messages: list[dict],
 ) -> list[dict]:
     """Build OpenAI's flat ``messages`` list from Anthropic's ``system=`` +
     ``messages``. Anthropic-style tool_result blocks become standalone
@@ -139,14 +140,16 @@ def _split_assistant_blocks(content) -> tuple[str, list[dict]]:
         if btype == "text":
             text_parts.append(block.get("text", ""))
         elif btype == "tool_use":
-            tool_calls.append({
-                "id": block.get("id", ""),
-                "type": "function",
-                "function": {
-                    "name": block.get("name", ""),
-                    "arguments": json.dumps(block.get("input", {}) or {}),
-                },
-            })
+            tool_calls.append(
+                {
+                    "id": block.get("id", ""),
+                    "type": "function",
+                    "function": {
+                        "name": block.get("name", ""),
+                        "arguments": json.dumps(block.get("input", {}) or {}),
+                    },
+                }
+            )
     return "".join(text_parts), tool_calls
 
 
@@ -155,7 +158,9 @@ def _content_to_text(content) -> str:
         return content
     if isinstance(content, list):
         return "".join(
-            b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"
+            b.get("text", "")
+            for b in content
+            if isinstance(b, dict) and b.get("type") == "text"
         )
     return str(content)
 
@@ -166,14 +171,16 @@ def _build_openai_tools(tools: list[dict]) -> list[dict]:
     ``cache_control`` markers are silently dropped."""
     out = []
     for t in tools:
-        out.append({
-            "type": "function",
-            "function": {
-                "name": t.get("name", ""),
-                "description": t.get("description", ""),
-                "parameters": t.get("input_schema", {"type": "object"}),
-            },
-        })
+        out.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": t.get("name", ""),
+                    "description": t.get("description", ""),
+                    "parameters": t.get("input_schema", {"type": "object"}),
+                },
+            }
+        )
     return out
 
 
@@ -193,12 +200,14 @@ def _unmarshal_response(response: Any) -> ProviderResponse:
             args = json.loads(tc.function.arguments or "{}")
         except json.JSONDecodeError:
             args = {"_raw_arguments": tc.function.arguments}
-        blocks.append({
-            "type": "tool_use",
-            "id": tc.id,
-            "name": tc.function.name,
-            "input": args,
-        })
+        blocks.append(
+            {
+                "type": "tool_use",
+                "id": tc.id,
+                "name": tc.function.name,
+                "input": args,
+            }
+        )
     finish_reason = getattr(choice, "finish_reason", None) or ""
     stop_reason = _STOP_REASON_MAP.get(finish_reason, finish_reason or "unknown")
     # Some servers fail to set finish_reason="tool_calls" even when emitting

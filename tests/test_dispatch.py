@@ -103,7 +103,11 @@ class FakeProvider:
             raise AssertionError("no fake response queued for this call")
         fake = self.messages.responses.pop(0)
         content = [b.model_dump() for b in fake.content]
-        usage = fake.usage.model_dump() if hasattr(fake.usage, "model_dump") else (fake.usage or {})
+        usage = (
+            fake.usage.model_dump()
+            if hasattr(fake.usage, "model_dump")
+            else (fake.usage or {})
+        )
         return ProviderResponse(
             content=content,
             stop_reason=fake.stop_reason,

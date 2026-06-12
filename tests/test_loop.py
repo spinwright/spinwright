@@ -89,13 +89,20 @@ class FakeProvider:
 
     def create_message(self, **kwargs):
         from spinwright.llm.providers.base import ProviderResponse
+
         self.messages.calls.append(copy.deepcopy(kwargs))
         if not self.messages.responses:
             raise AssertionError("no fake response queued for this call")
         fake = self.messages.responses.pop(0)
         content = [b.model_dump() for b in fake.content]
-        usage = fake.usage.model_dump() if hasattr(fake.usage, "model_dump") else (fake.usage or {})
-        return ProviderResponse(content=content, stop_reason=fake.stop_reason, usage=usage)
+        usage = (
+            fake.usage.model_dump()
+            if hasattr(fake.usage, "model_dump")
+            else (fake.usage or {})
+        )
+        return ProviderResponse(
+            content=content, stop_reason=fake.stop_reason, usage=usage
+        )
 
 
 FakeClient = FakeProvider
@@ -443,7 +450,13 @@ def test_loop_stops_on_token_budget(tmp_path: Path):
         ),
     )
 
-    result = loop.run_loop(ws=ws, extraction_path=ext_path, config=cfg, provider=client, model="claude-test")
+    result = loop.run_loop(
+        ws=ws,
+        extraction_path=ext_path,
+        config=cfg,
+        provider=client,
+        model="claude-test",
+    )
     assert result.success
     assert result.stop_reason == "token_budget_exhausted"
     assert len(result.iterations) == 1
