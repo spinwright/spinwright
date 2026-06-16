@@ -6,11 +6,11 @@ spinwright prep git@github.com:static-frame/static-frame.git -r requirements-dev
 spinwright candidates ../spinwright-sf --test-path static_frame/test/unit
 
 
-spinwright extract ../spinwright-sf --test static_frame/test/unit/test_index_hierarchy_set_utils.py::TestUnit::test_index_hierarchy_union
+spinwright extract ../spinwright-sf --test static_frame/test/unit/test_index_hierarchy_set_utils.py::TestUnit::test_index_hierarchy_union --model ollama/kimi-k2.7-code
 
 spinwright measure ../spinwright-sf --extraction static_frame_test_unit_test_index_hierarchy_set_utils__TestUnit__test_index_hierarchy_union
 
-spinwright optimize ../spinwright-sf --extraction static_frame_test_unit_test_index_hierarchy_set_utils__TestUnit__test_index_hierarchy_union
+spinwright optimize ../spinwright-sf --extraction static_frame_test_unit_test_index_hierarchy_set_utils__TestUnit__test_index_hierarchy_union --model ollama/kimi-k2.7-code
 
   - optimize — one round. LLM profiles, picks the hot function, proposes ONE patch, measures, accepts-or-reverts. ~5–10k tokens.
   Good for "show me what's possible here" with a known cost.

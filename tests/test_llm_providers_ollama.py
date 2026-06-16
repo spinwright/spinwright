@@ -12,6 +12,16 @@ def test_default_base_url_targets_ollama_cloud(monkeypatch):
     assert _ollama_base_url() == "https://ollama.com/v1"
 
 
+def test_empty_string_ollama_host_treated_as_unset(monkeypatch):
+    """Regression: GitHub Action workflows commonly export
+    ``OLLAMA_HOST=${{ inputs.ollama_host }}`` with an empty input, so the env
+    var is set to ``""``. Without special handling that becomes a scheme-less
+    base URL of ``"/v1"`` and httpx raises an inscrutable UnsupportedProtocol
+    error. Empty string must fall through to the cloud default."""
+    monkeypatch.setenv("OLLAMA_HOST", "")
+    assert _ollama_base_url() == "https://ollama.com/v1"
+
+
 def test_local_self_hosted_via_env_override(monkeypatch):
     monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
     assert _ollama_base_url() == "http://localhost:11434/v1"

@@ -4,9 +4,14 @@ import argparse
 import sys
 
 _MODEL_HELP = (
-    "Model id for the LLM agent, overriding [models].model in config "
-    "(default: claude-opus-4-7). Anthropic ids work today; OpenAI/Ollama "
-    "provider routing is planned."
+    "Model spec for the LLM agent, overriding [models].model in config "
+    "(default: claude-opus-4-7). Either explicit `provider/model_id` — "
+    "`anthropic/claude-opus-4-7`, `openai/gpt-4o`, `ollama/llama3.1:8b` — "
+    "or a bare name auto-routed by heuristics (`claude-*` → anthropic, "
+    "`gpt-*` / `o[1-9]-*` → openai). The matching API key must be set: "
+    "ANTHROPIC_API_KEY, OPENAI_API_KEY, or OLLAMA_API_KEY for hosted "
+    "Ollama Cloud (OLLAMA_HOST overrides the cloud default to point at a "
+    "self-hosted endpoint, which doesn't need a key)."
 )
 
 

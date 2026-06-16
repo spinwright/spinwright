@@ -38,8 +38,14 @@ def _ollama_base_url() -> str:
 
     Real-world OLLAMA_HOST values vary: ``http://host:11434`` (most common),
     ``http://host:11434/`` (trailing slash), or already ``http://host:11434/v1``.
-    Normalize so we always end up with exactly one ``/v1`` suffix."""
-    raw = os.environ.get("OLLAMA_HOST", _DEFAULT_OLLAMA_HOST).rstrip("/")
+    Normalize so we always end up with exactly one ``/v1`` suffix.
+
+    Empty-string handling: CI runners commonly export the env var
+    unconditionally from a workflow input that may be blank (``OLLAMA_HOST:
+    ${{ inputs.ollama_host }}``). Treat ``""`` the same as unset, otherwise
+    ``"".rstrip("/") + "/v1"`` produces a scheme-less ``"/v1"`` and the
+    openai SDK trips httpx with a confusing UnsupportedProtocol error."""
+    raw = (os.environ.get("OLLAMA_HOST") or _DEFAULT_OLLAMA_HOST).rstrip("/")
     if raw.endswith("/v1"):
         return raw
     return raw + "/v1"

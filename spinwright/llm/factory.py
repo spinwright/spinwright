@@ -139,6 +139,10 @@ def make_provider(
         # explicit "I know what I'm doing" signal and let the key be empty;
         # the provider sends a sentinel value the local server ignores.
         key = api_key or os.environ.get("OLLAMA_API_KEY")
+        # ``bool(...)`` treats empty string as False, which is what we want —
+        # CI workflows commonly export ``OLLAMA_HOST=${{ inputs.ollama_host }}``
+        # with a blank input, and that should NOT count as "user picked a
+        # self-hosted endpoint that doesn't need auth."
         host_explicit = bool(os.environ.get("OLLAMA_HOST"))
         if not key and not host_explicit:
             raise MissingAPIKeyError(
