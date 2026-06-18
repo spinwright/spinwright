@@ -12,12 +12,10 @@ spinwright measure ../spinwright-sf --extraction static_frame_test_unit_test_ind
 
 spinwright optimize ../spinwright-sf --extraction static_frame_test_unit_test_index_hierarchy_set_utils__TestUnit__test_index_hierarchy_union --model ollama/kimi-k2.7-code
 
-  - optimize — one round. LLM profiles, picks the hot function, proposes ONE patch, measures, accepts-or-reverts. ~5–10k tokens.
-  Good for "show me what's possible here" with a known cost.
-  - run — full agent loop (up to budget.max_patches_proposed iterations, default 10), then full pytest regression check, then PR.md
-  assembly. ~30–100k tokens depending on how far it gets. Good for "do the real work."
 
-  Two flags worth knowing on run:
-  - --skip-regression — skips the full pytest suite at the end (the suite is huge and slow on static-frame); useful while iterating
+
+===
+Eligible candidates (2):
+    0.110s   static_frame/test/unit/test_type_blocks.py::TestUnit::test_type_blocks_group_d
 
 

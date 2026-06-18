@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spinwright"
-version = "1.0.0"
+dynamic = ["version"]
 description = "LLM-driven Python performance-optimization agent."
 requires-python = ">=3.11"
 readme = "README.md"
@@ -24,6 +24,9 @@ dev = [
 
 [project.scripts]
 spinwright = "spinwright.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "spinwright.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["."]
