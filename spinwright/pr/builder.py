@@ -46,6 +46,7 @@ def build_pr(
     run_id: str,
     model: str,
     repo_dir: Path,
+    review_attempts: tuple[OptimizationResult, ...] = (),
 ) -> PRDraft:
     """Render a PR title + body from an optimization run's outcome.
 
@@ -53,6 +54,12 @@ def build_pr(
     survivors are quoted in the body. If no patches survive, the title is
     still computed but the body reads as a "nothing to ship" report so the
     caller can decide whether to skip the PR entirely.
+
+    ``review_attempts`` are unaccepted-but-committed attempts published under
+    ``--always-publish`` (see ``publish.commit_attempt_for_review``). They only
+    matter when there are no survivors: the body then renders their diff,
+    summary, measured impact, and rejection reason so the model's tested change
+    and reasoning can be reviewed even though it didn't clear the gate.
     """
     dropped_set = set(regression.dropped_commits) if regression else set()
     survivors: list[OptimizationResult] = []
@@ -61,12 +68,15 @@ def build_pr(
         if it.commit_sha and it.commit_sha not in dropped_set:
             survivors.append(it)
 
+    # Review attempts are only surfaced when nothing cleared the gate.
+    review = () if survivors else tuple(review_attempts)
+
     # Total deltas computed from baseline to FINAL state, which is what's on
     # disk after the regression check. We can't trivially re-measure here, so
     # we use the loop's final readings as a best-available figure. If a patch
     # was dropped during regression, the displayed deltas will overstate
     # improvement — we mark this in the body.
-    title = _build_title(loop_result, survivors, extraction)
+    title = _build_title(loop_result, survivors, extraction, review)
     body = _build_body(
         loop_result=loop_result,
         survivors=survivors,
@@ -75,6 +85,7 @@ def build_pr(
         run_id=run_id,
         model=model,
         repo_dir=repo_dir,
+        review_attempts=review,
     )
     return PRDraft(
         title=title,
@@ -93,11 +104,18 @@ def _build_title(
     loop_result: LoopResult,
     survivors: list[OptimizationResult],
     extraction: ExtractionMetadata,
+    review_attempts: tuple[OptimizationResult, ...] = (),
 ) -> str:
     module = _infer_top_module(loop_result, survivors)
     test_name = _short_test_name(extraction)
     metric_label, delta_pct = _primary_total_delta(loop_result, survivors)
     if delta_pct is None or not survivors:
+        if review_attempts:
+            review_module = _module_from_attempts(review_attempts) or module
+            return (
+                f"perf({review_module}): unaccepted attempt for review "
+                f"on {test_name}"
+            )
         return f"perf({module}): no improvements found on {test_name}"
     if len(survivors) == 1:
         desc = _short_desc(survivors[0])
@@ -149,11 +167,23 @@ def _infer_top_module(
         return "optimization"
     counts: dict[str, int] = {}
     for it in survivors:
-        for path in _diff_paths(it.diff):
+        for path in diff_rel_paths(it.diff):
             mod = _module_from_path(path)
             counts[mod] = counts.get(mod, 0) + 1
     if not counts:
         return "optimization"
+    return max(counts.items(), key=lambda kv: kv[1])[0]
+
+
+def _module_from_attempts(attempts: tuple[OptimizationResult, ...]) -> str | None:
+    """Most-touched module across the given attempts' diffs, or None."""
+    counts: dict[str, int] = {}
+    for it in attempts:
+        for path in diff_rel_paths(it.diff):
+            mod = _module_from_path(path)
+            counts[mod] = counts.get(mod, 0) + 1
+    if not counts:
+        return None
     return max(counts.items(), key=lambda kv: kv[1])[0]
 
 
@@ -171,7 +201,7 @@ def _module_from_path(path: str) -> str:
     return ".".join(parts)
 
 
-def _diff_paths(diff: str) -> list[str]:
+def diff_rel_paths(diff: str) -> list[str]:
     return [
         line.split()[2][2:]  # "diff --git a/X b/X" → "X"
         for line in diff.splitlines()
@@ -227,6 +257,7 @@ def _build_body(
     run_id: str,
     model: str,
     repo_dir: Path,
+    review_attempts: tuple[OptimizationResult, ...] = (),
 ) -> str:
     metric_name, total_delta = _primary_total_delta(loop_result, survivors)
     lines: list[str] = []
@@ -242,7 +273,7 @@ def _build_body(
             else "median wallclock"
         )
         modules = sorted(
-            {_module_from_path(p) for it in survivors for p in _diff_paths(it.diff)}
+            {_module_from_path(p) for it in survivors for p in diff_rel_paths(it.diff)}
         )
         module_str = ", ".join(f"`{m}`" for m in modules) or "the target package"
         test_name = extraction.original_nodeid or extraction.extraction_path.name
@@ -260,6 +291,14 @@ def _build_body(
                 f"{len(regression.dropped_commits)} of them; those were dropped "
                 f"via `{regression.fallback_used}` before this PR was assembled.)_"
             )
+    elif review_attempts:
+        test_name = extraction.original_nodeid or extraction.extraction_path.name
+        lines.append(
+            "Spinwright found no change clearing the gate threshold. Published "
+            "under `--always-publish`: this PR carries the model's most-improved "
+            f"**tested-but-unaccepted** attempt on `{test_name}` so the change and "
+            "its reasoning can be reviewed. **Not for merge as-is.**"
+        )
     else:
         lines.append("Spinwright found no improvements clearing the gate threshold.")
         lines.append("This PR is informational only.")
@@ -291,6 +330,12 @@ def _build_body(
     if survivors:
         for i, it in enumerate(survivors, start=1):
             lines.extend(_bottleneck_section(i, it, total_metric=metric_name))
+    elif review_attempts:
+        for i, it in enumerate(review_attempts, start=1):
+            lines.extend(_bottleneck_section(i, it, total_metric=metric_name))
+            reason = (it.rejection_reason or "below gate threshold").splitlines()[0]
+            lines.append("")
+            lines.append(f"**Not accepted:** {reason}")
     else:
         lines.append("")
         lines.append("None accepted.")
@@ -388,7 +433,7 @@ def _bottleneck_section(
         # fall back to "the modified function" if not parseable.
         pass
     # Try to find the focus from the diff
-    diff_paths = _diff_paths(it.diff)
+    diff_paths = diff_rel_paths(it.diff)
     file_hint = diff_paths[0] if diff_paths else "the modified file"
     summary = ""
     if it.conversation is not None:

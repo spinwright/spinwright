@@ -43,6 +43,11 @@ on:
         description: "Model spec (e.g. anthropic/claude-opus-4-7, openai/gpt-4o, ollama/llama3.1:8b). Blank = config default."
         required: false
         default: ""
+      always_publish:
+        description: "Open a PR even when no patch beats the metric (publishes the tested-but-unaccepted change + reasoning for review). Handy when comparing models."
+        type: boolean
+        required: false
+        default: false
 jobs:
   optimize:
     uses: spinwright/spinwright/.github/workflows/optimize.yml@main
@@ -52,6 +57,7 @@ jobs:
       requirements: ${{ inputs.requirements }}
       extras:       ${{ inputs.extras }}
       model:        ${{ inputs.model }}
+      always_publish: ${{ inputs.always_publish }}
       # Remove this line once `pip install spinwright` works.
       spinwright_install_spec: 'git+https://github.com/spinwright/spinwright.git@main'
     secrets:

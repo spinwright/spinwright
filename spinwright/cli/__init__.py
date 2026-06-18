@@ -192,6 +192,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip the PR assembly + publish step (still writes the run directory).",
     )
     p_run.add_argument(
+        "--always-publish",
+        action="store_true",
+        help=(
+            "Publish a PR even when no patch clears the gate. The most-improved "
+            "tested-but-unaccepted change is committed and opened for review "
+            "(useful when comparing models). Default: only publish on a "
+            "surviving improvement."
+        ),
+    )
+    p_run.add_argument(
         "--runs-dir",
         default="./spinwright-runs",
         help="Directory for per-run artifact subdirectories.",

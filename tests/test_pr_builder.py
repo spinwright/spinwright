@@ -158,6 +158,55 @@ def test_title_no_survivors(tmp_path: Path):
     assert "test_foo" in pr.title
 
 
+def test_review_attempt_published_when_no_survivors(tmp_path: Path):
+    attempt = _iteration(
+        accepted=False,
+        diff=_DIFF_ONE_FILE,
+        walltime_delta=0.05,
+        final_text="Replaced the comprehension with list().",
+    )
+    attempt.rejection_reason = (
+        "median walltime improvement 5.00% is below threshold 20%"
+    )
+    loop = _loop_result(attempt)
+    pr = builder.build_pr(
+        loop_result=loop,
+        regression=None,
+        extraction=_meta(tmp_path),
+        run_id="r1",
+        model="anthropic/claude-opus-4-7",
+        repo_dir=tmp_path,
+        review_attempts=(attempt,),
+    )
+    assert pr.accepted_count == 0
+    assert "unaccepted attempt for review" in pr.title
+    assert "static_frame.core.index" in pr.title  # module inferred from the diff
+    assert "tested-but-unaccepted" in pr.body
+    assert "Replaced the comprehension" in pr.body  # the model's reasoning
+    assert "below threshold" in pr.body  # why it wasn't accepted
+    assert "```diff" in pr.body  # the change itself
+
+
+def test_review_attempt_ignored_when_a_survivor_exists(tmp_path: Path):
+    survivor = _iteration(
+        accepted=True, diff=_DIFF_ONE_FILE, walltime_delta=0.30, sha="deadbeef"
+    )
+    rejected = _iteration(accepted=False, diff=_DIFF_ONE_FILE, walltime_delta=0.05)
+    loop = _loop_result(survivor, rejected)
+    pr = builder.build_pr(
+        loop_result=loop,
+        regression=None,
+        extraction=_meta(tmp_path),
+        run_id="r1",
+        model="m",
+        repo_dir=tmp_path,
+        review_attempts=(rejected,),
+    )
+    # A real survivor takes precedence; the review path is not taken.
+    assert pr.accepted_count == 1
+    assert "tested-but-unaccepted" not in pr.body
+
+
 def test_title_one_survivor_uses_summary(tmp_path: Path):
     loop = _loop_result(
         _iteration(
@@ -343,7 +392,7 @@ def test_module_from_path_strips_diff_prefix():
 
 
 def test_diff_paths_extracts_files():
-    paths = builder._diff_paths(_DIFF_ONE_FILE)
+    paths = builder.diff_rel_paths(_DIFF_ONE_FILE)
     assert paths == ["static_frame/core/index.py"]
 
 

@@ -27,6 +27,22 @@ def git_diff(repo_dir: Path) -> str:
     return _git(repo_dir, "diff", "HEAD")
 
 
+def git_apply(repo_dir: Path, diff_text: str) -> bool:
+    """Apply a unified diff (as produced by ``git_diff``) to the working tree
+    via ``git apply`` reading from stdin. Returns True on success, False if the
+    patch doesn't apply cleanly. Used to reconstruct a reverted optimization
+    attempt so it can be committed and published for review."""
+    if not diff_text.strip():
+        return False
+    proc = subprocess.run(
+        ["git", "-C", str(repo_dir), "apply", "--whitespace=nowarn"],
+        input=diff_text,
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode == 0
+
+
 def git_revert_path(workspace_root: Path, repo_dir: Path, path: str) -> RevertResult:
     """Restore one path to HEAD via ``git checkout HEAD -- <rel_path>``.
 

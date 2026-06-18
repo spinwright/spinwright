@@ -200,6 +200,34 @@ def run(
         len(reg.dropped_commits) if reg else 0
     )
 
+    # Under --always-publish, when nothing cleared the gate, reconstruct the
+    # most-improved tested-but-unaccepted attempt and commit it so there is a
+    # branch to open a review PR from (the loop reverted rejected patches and
+    # the regression check strips dropped ones, so the branch is back at base).
+    review_attempts: tuple = ()
+    if args.always_publish and surviving_patches == 0 and not args.no_pr:
+        attempt = pr_publish.pick_review_attempt(loop_result)
+        sha = (
+            pr_publish.commit_attempt_for_review(ws, attempt)
+            if attempt is not None
+            else None
+        )
+        if sha:
+            review_attempts = (attempt,)
+            print(
+                f"--always-publish: committed unaccepted attempt {sha[:12]} "
+                "for review",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "--always-publish: no committable attempt (model made no "
+                "applicable edit) — writing report only, no PR",
+                file=sys.stderr,
+            )
+
+    do_publish = surviving_patches > 0 or bool(review_attempts)
+
     # PR assembly + publish
     run_id = run_log.make_run_id()
     runs_root = Path(args.runs_dir).expanduser()
@@ -220,6 +248,7 @@ def run(
             run_id=run_id,
             model=model_spec,  # PR notes record the full `provider/model` spec
             repo_dir=ws.repo_dir,
+            review_attempts=review_attempts,
         )
         run_dir = run_log.write_run_directory(
             runs_root=runs_root,
@@ -234,7 +263,7 @@ def run(
                 "base_sha": ws.base_sha,
             },
         )
-        if surviving_patches > 0:
+        if do_publish:
             publish_result = pr_publish.publish(
                 ws=ws,
                 pr_draft=pr_draft,
@@ -265,6 +294,10 @@ def run(
     print()
     print(f"RUN_DIR={run_dir}")
     print(f"SURVIVING_PATCHES={surviving_patches}")
+    # PUBLISH signals whether a PR should be opened (CI gates the Open PR step on
+    # it): 1 when there's a surviving improvement or an --always-publish review
+    # commit, 0 otherwise.
+    print(f"PUBLISH={'1' if do_publish else '0'}")
 
     if surviving_patches == 0:
         return 1

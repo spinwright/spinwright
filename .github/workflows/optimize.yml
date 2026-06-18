@@ -54,6 +54,15 @@ on:
           tends to be slow and sometimes flaky in CI (network-dependent tests,
           large fixtures); the regression value is highest when run by humans
           on a clean dev box. Pass `false` to enable it.
+      always_publish:
+        type: boolean
+        required: false
+        default: false
+        description: |
+          Open a PR even when no patch clears the gate. The most-improved
+          tested-but-unaccepted change is committed and published for review.
+          Useful when comparing models — you see what each one tried and why,
+          even on a non-improvement. Default false (only publish on a win).
       model:
         type: string
         required: false
@@ -235,21 +244,28 @@ jobs:
           if [ "${{ inputs.skip_regression }}" = "true" ]; then
             RUN_ARGS+=(--skip-regression)
           fi
+          if [ "${{ inputs.always_publish }}" = "true" ]; then
+            RUN_ARGS+=(--always-publish)
+          fi
           set +e
           spinwright run "${RUN_ARGS[@]}" | tee /tmp/run.out
           STATUS=$?
           set -e
           RUN_DIR=$(grep '^RUN_DIR=' /tmp/run.out | tail -1 | cut -d= -f2-)
           SURV=$(grep '^SURVIVING_PATCHES=' /tmp/run.out | tail -1 | cut -d= -f2-)
+          PUB=$(grep '^PUBLISH=' /tmp/run.out | tail -1 | cut -d= -f2-)
           echo "run_dir=$RUN_DIR"             >> "$GITHUB_OUTPUT"
           echo "surviving_patches=$SURV"      >> "$GITHUB_OUTPUT"
+          echo "publish=$PUB"                 >> "$GITHUB_OUTPUT"
           echo "status=$STATUS"               >> "$GITHUB_OUTPUT"
           # Don't fail the job here: zero accepted patches is a valid
           # outcome and we still want the artifacts uploaded.
           true
 
       - name: Open PR
-        if: steps.run.outputs.surviving_patches != '' && steps.run.outputs.surviving_patches != '0'
+        # publish=1 when there's a surviving improvement OR an --always-publish
+        # review commit; the CLI decides and emits it on a PUBLISH= line.
+        if: steps.run.outputs.publish == '1'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

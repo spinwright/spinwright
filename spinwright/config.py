@@ -48,8 +48,8 @@ class MeasurementConfig:
 class BudgetConfig:
     tokens_per_run: int = 2_000_000
     max_patches_proposed: int = 1  # was 10
-    max_wall_clock_minutes: int = 10
-    max_extraction_turns: int = 50
+    max_wall_clock_minutes: int = 15
+    max_extraction_turns: int = 100
 
 
 @dataclass(frozen=True)
