@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spinwright"
-version = "0.2.0"
+version = "1.0.0"
 description = "LLM-driven Python performance-optimization agent."
 requires-python = ">=3.11"
 readme = "README.md"
