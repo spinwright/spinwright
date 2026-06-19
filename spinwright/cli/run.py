@@ -215,8 +215,7 @@ def run(
         if sha:
             review_attempts = (attempt,)
             print(
-                f"--always-publish: committed unaccepted attempt {sha[:12]} "
-                "for review",
+                f"--always-publish: committed unaccepted attempt {sha[:12]} for review",
                 file=sys.stderr,
             )
         else:

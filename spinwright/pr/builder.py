@@ -126,7 +126,9 @@ def _build_title(
             # number a reviewer cares about ("the model tried this and got X").
             attempt_delta = _best_attempt_delta(review_attempts)
             if attempt_delta is not None:
-                return f"spinwright / {test_name} / review {_format_delta(attempt_delta)}"
+                return (
+                    f"spinwright / {test_name} / review {_format_delta(attempt_delta)}"
+                )
             return f"spinwright / {test_name} / review (no measurable change)"
         return f"spinwright / {test_name} / no improvements"
     return f"spinwright / {test_name} / {_format_delta(delta_pct)}"
@@ -135,7 +137,9 @@ def _build_title(
 def _best_attempt_delta(attempts: tuple[OptimizationResult, ...]) -> float | None:
     """Largest reduction across the attempts' own per-iteration measurements
     (``relative_improvement`` is the primary-metric delta the gate considered)."""
-    deltas = [a.relative_improvement for a in attempts if a.relative_improvement is not None]
+    deltas = [
+        a.relative_improvement for a in attempts if a.relative_improvement is not None
+    ]
     if not deltas:
         return None
     return max(deltas)
