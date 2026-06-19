@@ -153,9 +153,7 @@ def test_title_no_survivors(tmp_path: Path):
         model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
-    assert pr.title.startswith("perf(")
-    assert "no improvements" in pr.title
-    assert "test_foo" in pr.title
+    assert pr.title == "spinwright / test_foo / no improvements"
 
 
 def test_review_attempt_published_when_no_survivors(tmp_path: Path):
@@ -179,8 +177,9 @@ def test_review_attempt_published_when_no_survivors(tmp_path: Path):
         review_attempts=(attempt,),
     )
     assert pr.accepted_count == 0
-    assert "unaccepted attempt for review" in pr.title
-    assert "static_frame.core.index" in pr.title  # module inferred from the diff
+    # Review-mode title carries the attempted delta as a signed percentage.
+    assert pr.title.startswith("spinwright / test_foo / review")
+    assert "-5%" in pr.title
     assert "tested-but-unaccepted" in pr.body
     assert "Replaced the comprehension" in pr.body  # the model's reasoning
     assert "below threshold" in pr.body  # why it wasn't accepted
@@ -207,7 +206,10 @@ def test_review_attempt_ignored_when_a_survivor_exists(tmp_path: Path):
     assert "tested-but-unaccepted" not in pr.body
 
 
-def test_title_one_survivor_uses_summary(tmp_path: Path):
+def test_title_single_survivor_uses_fixed_three_segment_form(tmp_path: Path):
+    """No more LLM-authored description in the title — older versions
+    sometimes produced titles like 'All 1861 tests pass' from the model's
+    final assistant text. Fixed form ``spinwright / <test> / <±delta>``."""
     loop = _loop_result(
         _iteration(
             accepted=True,
@@ -227,19 +229,18 @@ def test_title_one_survivor_uses_summary(tmp_path: Path):
         model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
-    assert "perf(static_frame.core.index)" in pr.title
-    assert "Swapped the list comprehension" in pr.title
-    assert "−30% wallclock" in pr.title
-    assert "test_foo" in pr.title
+    assert pr.title == "spinwright / test_foo / -30%"
 
 
-def test_title_multi_survivor_uses_count(tmp_path: Path):
+def test_title_multi_survivor_uses_total_delta(tmp_path: Path):
+    """Multiple survivors collapse to the same fixed format — the body has the
+    per-patch breakdown, the title just carries the cumulative number."""
     diff1 = _DIFF_ONE_FILE
     diff2 = _DIFF_ONE_FILE.replace("index.py", "frame.py")
     loop = _loop_result(
         _iteration(accepted=True, diff=diff1, walltime_delta=0.20, sha="aaa"),
         _iteration(accepted=True, diff=diff2, walltime_delta=0.30, sha="bbb"),
-        final_wt=_wt(0.50),
+        final_wt=_wt(0.50),  # 1.0 → 0.5 = 50% total wallclock reduction
     )
     pr = builder.build_pr(
         loop_result=loop,
@@ -249,13 +250,13 @@ def test_title_multi_survivor_uses_count(tmp_path: Path):
         model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
-    assert "2 optimizations" in pr.title
-    # Most-touched module is whichever has more entries; with one diff each
-    # the first wins via dict-insertion order.
-    assert "perf(static_frame.core" in pr.title
+    assert pr.title == "spinwright / test_foo / -50%"
 
 
-def test_title_callgrind_metric_label(tmp_path: Path):
+def test_title_callgrind_delta_unitless(tmp_path: Path):
+    """The title no longer carries the metric name (instructions vs wallclock)
+    — the body's measurements table makes that distinction explicitly. The
+    title just reports the signed percentage for whichever gate was used."""
     loop = _loop_result(
         _iteration(
             accepted=True,
@@ -277,7 +278,7 @@ def test_title_callgrind_metric_label(tmp_path: Path):
         model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
-    assert "−40% instructions" in pr.title
+    assert pr.title == "spinwright / test_foo / -40%"
 
 
 # ---------------------------------------------------------------------------
@@ -396,12 +397,9 @@ def test_diff_paths_extracts_files():
     assert paths == ["static_frame/core/index.py"]
 
 
-def test_short_desc_truncates_long_text():
-    text = "x" * 200
-    it = _iteration(accepted=True, final_text=text)
-    assert len(builder._short_desc(it)) <= 60
-
-
-def test_short_desc_keeps_first_sentence():
-    it = _iteration(accepted=True, final_text="First sentence. Second sentence.")
-    assert builder._short_desc(it) == "First sentence"
+def test_format_delta_is_signed_bare_percent():
+    """A 30% reduction renders as `-30%`; a regression renders as `+12%`.
+    No metric label in the string — titles append it explicitly."""
+    assert builder._format_delta(0.30) == "-30%"
+    assert builder._format_delta(-0.12) == "+12%"
+    assert builder._format_delta(0.0) == "+0%"

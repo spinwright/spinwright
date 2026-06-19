@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -106,85 +105,55 @@ def _build_title(
     extraction: ExtractionMetadata,
     review_attempts: tuple[OptimizationResult, ...] = (),
 ) -> str:
-    module = _infer_top_module(loop_result, survivors)
+    """Format: ``spinwright / <test_name> / <±delta>``.
+
+    Older versions of this function tried to inject an LLM-authored
+    description into the title (first sentence of the final assistant turn);
+    in practice that produced titles like "All 1861 tests pass" or
+    "Total cprofile time: 43.6ms vs 61.1ms baseline → 28%…" because the
+    model's last sentence wasn't reliably a *description of what changed*.
+    The fixed three-segment form is uglier but consistently informative,
+    and the body's "Bottlenecks and Changes" section already provides the
+    human-readable summary.
+    """
     test_name = _short_test_name(extraction)
-    metric_label, delta_pct = _primary_total_delta(loop_result, survivors)
+    _metric_label, delta_pct = _primary_total_delta(loop_result, survivors)
     if delta_pct is None or not survivors:
         if review_attempts:
-            review_module = _module_from_attempts(review_attempts) or module
-            return (
-                f"perf({review_module}): unaccepted attempt for review "
-                f"on {test_name}"
-            )
-        return f"perf({module}): no improvements found on {test_name}"
-    if len(survivors) == 1:
-        desc = _short_desc(survivors[0])
-    else:
-        desc = f"{len(survivors)} optimizations"
-    metric_text = (
-        "instructions" if metric_label == "callgrind_instructions" else "wallclock"
-    )
-    return f"perf({module}): {desc} (−{delta_pct:.0%} {metric_text} on {test_name})"
+            # Tested-but-unaccepted attempt published for review. The loop's
+            # final-vs-baseline delta is zero (the attempt was reverted), so
+            # we report what the attempt itself measured — that's the signed
+            # number a reviewer cares about ("the model tried this and got X").
+            attempt_delta = _best_attempt_delta(review_attempts)
+            if attempt_delta is not None:
+                return f"spinwright / {test_name} / review {_format_delta(attempt_delta)}"
+            return f"spinwright / {test_name} / review (no measurable change)"
+        return f"spinwright / {test_name} / no improvements"
+    return f"spinwright / {test_name} / {_format_delta(delta_pct)}"
 
 
-def _short_desc(it: OptimizationResult) -> str:
-    """One-shot patch description: take the conversation's final assistant text,
-    keep the first sentence, trim to ~60 chars."""
-    text = ""
-    if it.conversation is not None:
-        text = (it.conversation.final_text or "").strip()
-    if not text:
-        return "optimization"
-    # First sentence: split on . ! ?
-    head = re.split(r"[.!?]\s", text, maxsplit=1)[0].strip()
-    if len(head) > 60:
-        head = head[:57].rstrip() + "..."
-    return head or "optimization"
+def _best_attempt_delta(attempts: tuple[OptimizationResult, ...]) -> float | None:
+    """Largest reduction across the attempts' own per-iteration measurements
+    (``relative_improvement`` is the primary-metric delta the gate considered)."""
+    deltas = [a.relative_improvement for a in attempts if a.relative_improvement is not None]
+    if not deltas:
+        return None
+    return max(deltas)
+
+
+def _format_delta(pct: float) -> str:
+    """Render a relative improvement as a signed bare percentage —
+    ``-51%`` for a 51% reduction, ``+12%`` for a regression. A literal zero
+    is rendered as ``+0%`` (not ``-0%``) because IEEE-754 signed-zero leaks
+    through ``-0.0`` otherwise."""
+    signed = -pct if pct != 0 else 0.0
+    return f"{signed:+.0%}"
 
 
 def _short_test_name(extraction: ExtractionMetadata) -> str:
     if extraction.original_nodeid:
         return extraction.original_nodeid.rsplit("::", 1)[-1]
     return extraction.extraction_path.stem
-
-
-def _infer_top_module(
-    loop_result: LoopResult, survivors: list[OptimizationResult]
-) -> str:
-    """Pick the most-touched module across the survivors' diffs. Falls back to
-    the focus filename of the first accepted iteration, then to 'optimization'.
-    """
-    if not survivors:
-        # Last-ditch: any focus_hint we did try?
-        for it in loop_result.iterations:
-            if it.conversation is None:
-                continue
-            for call in it.conversation.tool_calls or []:
-                if call.get("name") == "edit_file":
-                    path = call.get("input", {}).get("path", "")
-                    if path:
-                        return _module_from_path(path)
-        return "optimization"
-    counts: dict[str, int] = {}
-    for it in survivors:
-        for path in diff_rel_paths(it.diff):
-            mod = _module_from_path(path)
-            counts[mod] = counts.get(mod, 0) + 1
-    if not counts:
-        return "optimization"
-    return max(counts.items(), key=lambda kv: kv[1])[0]
-
-
-def _module_from_attempts(attempts: tuple[OptimizationResult, ...]) -> str | None:
-    """Most-touched module across the given attempts' diffs, or None."""
-    counts: dict[str, int] = {}
-    for it in attempts:
-        for path in diff_rel_paths(it.diff):
-            mod = _module_from_path(path)
-            counts[mod] = counts.get(mod, 0) + 1
-    if not counts:
-        return None
-    return max(counts.items(), key=lambda kv: kv[1])[0]
 
 
 def _module_from_path(path: str) -> str:
