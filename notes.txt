@@ -15,7 +15,6 @@ spinwright optimize ../spinwright-sf --extraction static_frame_test_unit_test_in
 
 
 ===
-Eligible candidates (2):
-    0.110s   static_frame/test/unit/test_type_blocks.py::TestUnit::test_type_blocks_group_d
+static_frame/test/unit/test_type_blocks.py::TestUnit::test_type_blocks_group_d
 
 
