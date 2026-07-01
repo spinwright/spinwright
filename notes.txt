@@ -22,15 +22,15 @@ static_frame/test/unit/test_type_blocks.py::TestUnit::test_type_blocks_group_d
 
 Evaluating:
 
-static_frame/test/unit/test_frame_iter.py::TestUnit::test_frame_group_c
 static_frame/test/unit/test_pivot.py::TestUnit::test_pivot_core_a
+static_frame/test/unit/test_frame_iter.py::TestUnit::test_frame_group_c
 static_frame/test/unit/test_frame.py::TestUnit::test_frame_assign_apply_element_a
 static_frame/test/unit/test_reduce.py::test_reduce_to_frame_a1
 
 
 Models:
 
-
+anthropic/claude-opus-4-8
 
 Evaluating:
 
