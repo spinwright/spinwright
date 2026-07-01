@@ -13,8 +13,31 @@ spinwright measure ../spinwright-sf --extraction static_frame_test_unit_test_ind
 spinwright optimize ../spinwright-sf --extraction static_frame_test_unit_test_index_hierarchy_set_utils__TestUnit__test_index_hierarchy_union --model ollama/kimi-k2.7-code
 
 
-
 ===
+in GitHub action
+
+Integrated:
+
 static_frame/test/unit/test_type_blocks.py::TestUnit::test_type_blocks_group_d
 
+Evaluating:
 
+static_frame/test/unit/test_frame_iter.py::TestUnit::test_frame_group_c
+static_frame/test/unit/test_pivot.py::TestUnit::test_pivot_core_a
+static_frame/test/unit/test_frame.py::TestUnit::test_frame_assign_apply_element_a
+static_frame/test/unit/test_reduce.py::test_reduce_to_frame_a1
+
+
+Models:
+
+
+
+Evaluating:
+
+ollama/kimi-k2.7-code
+ollama/minimax-m3
+
+
+Mixed Results
+
+ollama/glm-5.2

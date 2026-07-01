@@ -26,7 +26,7 @@ class CorpusConfig:
 
 @dataclass(frozen=True)
 class TestSelectionConfig:
-    slow_threshold_seconds: float = 0.01
+    slow_threshold_seconds: float = 0.001
     top_k_candidates: int = 5
     explicit_nodeid: str = ""
 
