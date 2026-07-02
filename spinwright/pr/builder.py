@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import spinwright
 from spinwright.optimization.loop import LoopResult
 from spinwright.optimization.optimize import OptimizationResult
 from spinwright.optimization.regression import RegressionResult
+
+if TYPE_CHECKING:
+    from spinwright.measurement.types import CallgrindResult, WalltimeResult
 
 
 # ---------------------------------------------------------------------------
@@ -70,12 +74,16 @@ def build_pr(
     # Review attempts are only surfaced when nothing cleared the gate.
     review = () if survivors else tuple(review_attempts)
 
-    # Total deltas computed from baseline to FINAL state, which is what's on
-    # disk after the regression check. We can't trivially re-measure here, so
-    # we use the loop's final readings as a best-available figure. If a patch
-    # was dropped during regression, the displayed deltas will overstate
-    # improvement — we mark this in the body.
-    title = _build_title(loop_result, survivors, extraction, review)
+    # How deltas are sourced depends on the outcome:
+    #   - Survivors: baseline → FINAL on-disk state (the loop's final readings).
+    #     We can't trivially re-measure here, so those are the best-available
+    #     figure. If a patch was dropped during regression the displayed deltas
+    #     overstate improvement — we mark this in the body.
+    #   - No survivors, review attempt: the attempt was reverted, so the final
+    #     state equals baseline. Title and table instead report the *attempt's*
+    #     own before/after (what it measured with the patch applied); the body
+    #     labels this as a reverted attempt.
+    title = _build_title(loop_result, survivors, extraction, review, model=model)
     body = _build_body(
         loop_result=loop_result,
         survivors=survivors,
@@ -104,19 +112,24 @@ def _build_title(
     survivors: list[OptimizationResult],
     extraction: ExtractionMetadata,
     review_attempts: tuple[OptimizationResult, ...] = (),
+    *,
+    model: str,
 ) -> str:
-    """Format: ``spinwright / <test_name> / <±delta>``.
+    """Format: ``spinwright / <test_name> / <±delta> / <model>``.
 
     Older versions of this function tried to inject an LLM-authored
     description into the title (first sentence of the final assistant turn);
     in practice that produced titles like "All 1861 tests pass" or
     "Total cprofile time: 43.6ms vs 61.1ms baseline → 28%…" because the
     model's last sentence wasn't reliably a *description of what changed*.
-    The fixed three-segment form is uglier but consistently informative,
+    The fixed four-segment form is uglier but consistently informative,
     and the body's "Bottlenecks and Changes" section already provides the
-    human-readable summary.
+    human-readable summary. The trailing segment is the model's short name
+    (the part after any ``provider/`` prefix) so PRs are attributable at a
+    glance.
     """
     test_name = _short_test_name(extraction)
+    model_name = _short_model_name(model)
     _metric_label, delta_pct = _primary_total_delta(loop_result, survivors)
     if delta_pct is None or not survivors:
         if review_attempts:
@@ -127,22 +140,41 @@ def _build_title(
             attempt_delta = _best_attempt_delta(review_attempts)
             if attempt_delta is not None:
                 return (
-                    f"spinwright / {test_name} / review {_format_delta(attempt_delta)}"
+                    f"spinwright / {test_name} / review "
+                    f"{_format_delta(attempt_delta)} / {model_name}"
                 )
-            return f"spinwright / {test_name} / review (no measurable change)"
-        return f"spinwright / {test_name} / no improvements"
-    return f"spinwright / {test_name} / {_format_delta(delta_pct)}"
+            return (
+                f"spinwright / {test_name} / review (no measurable change) "
+                f"/ {model_name}"
+            )
+        return f"spinwright / {test_name} / no improvements / {model_name}"
+    return f"spinwright / {test_name} / {_format_delta(delta_pct)} / {model_name}"
+
+
+def _short_model_name(model: str) -> str:
+    """``ollama/kimi-k2.7-code`` → ``kimi-k2.7-code``; a bare name is returned
+    unchanged. Only the final ``provider/`` prefix is stripped so nested paths
+    keep their trailing component."""
+    return model.rsplit("/", 1)[-1] or model
+
+
+def _best_attempt(
+    attempts: tuple[OptimizationResult, ...],
+) -> OptimizationResult | None:
+    """The attempt with the largest primary-metric reduction — the one whose
+    number the title reports and whose measurements the table should mirror.
+    Attempts without a measured ``relative_improvement`` are ignored."""
+    measured = [a for a in attempts if a.relative_improvement is not None]
+    if not measured:
+        return None
+    return max(measured, key=lambda a: a.relative_improvement)
 
 
 def _best_attempt_delta(attempts: tuple[OptimizationResult, ...]) -> float | None:
     """Largest reduction across the attempts' own per-iteration measurements
     (``relative_improvement`` is the primary-metric delta the gate considered)."""
-    deltas = [
-        a.relative_improvement for a in attempts if a.relative_improvement is not None
-    ]
-    if not deltas:
-        return None
-    return max(deltas)
+    best = _best_attempt(attempts)
+    return best.relative_improvement if best is not None else None
 
 
 def _format_delta(pct: float) -> str:
@@ -276,11 +308,33 @@ def _build_body(
         lines.append("Spinwright found no improvements clearing the gate threshold.")
         lines.append("This PR is informational only.")
 
-    # Measurements table
+    # Measurements table. For an accepted change we show baseline vs the final
+    # on-disk state. For a reverted review attempt the final state *is* the
+    # baseline (nothing was kept), so a baseline-vs-final table would render an
+    # impossible all-zero delta that contradicts the title; instead we show the
+    # attempt's own before/after — the same numbers the title's delta is drawn
+    # from.
     lines.append("")
     lines.append("## Measurements")
     lines.append("")
-    lines.append(_measurements_table(loop_result, metric_name))
+    base = loop_result.baseline
+    best = _best_attempt(review_attempts) if review_attempts else None
+    if best is not None:
+        table = _measurements_table(
+            baseline_wt=best.baseline_walltime,
+            final_wt=best.candidate_walltime,
+            baseline_cg=best.baseline_callgrind,
+            final_cg=best.candidate_callgrind,
+            attempt_reverted=True,
+        )
+    else:
+        table = _measurements_table(
+            baseline_wt=base.walltime if base is not None else None,
+            final_wt=loop_result.final_walltime,
+            baseline_cg=base.callgrind if base is not None else None,
+            final_cg=loop_result.final_callgrind,
+        )
+    lines.append(table)
 
     # Test
     lines.append("")
@@ -335,16 +389,22 @@ def _build_body(
     return "\n".join(lines) + "\n"
 
 
-def _measurements_table(loop_result: LoopResult, metric_name: str) -> str:
+def _measurements_table(
+    *,
+    baseline_wt: WalltimeResult | None,
+    final_wt: WalltimeResult | None,
+    baseline_cg: CallgrindResult | None,
+    final_cg: CallgrindResult | None,
+    attempt_reverted: bool = False,
+) -> str:
+    """Render a baseline-vs-after table. ``attempt_reverted`` labels the "After"
+    column as a tested-but-reverted attempt (the numbers the model measured with
+    the patch applied, not the current on-disk state)."""
     rows: list[tuple[str, str, str, str]] = []
-    b = loop_result.baseline
-    if b is None:
-        return "_(no baseline available)_"
-    fwt = loop_result.final_walltime
-    fcg = loop_result.final_callgrind
-    if b.callgrind is not None and fcg is not None:
-        base = b.callgrind.instructions
-        final = fcg.instructions
+    after_label = "After (reverted attempt)" if attempt_reverted else "After"
+    if baseline_cg is not None and final_cg is not None:
+        base = baseline_cg.instructions
+        final = final_cg.instructions
         delta = (base - final) / base if base > 0 else 0
         rows.append(
             (
@@ -354,9 +414,9 @@ def _measurements_table(loop_result: LoopResult, metric_name: str) -> str:
                 f"−{delta:.1%}",
             )
         )
-    if fwt is not None:
-        base_med = b.walltime.median_seconds
-        final_med = fwt.median_seconds
+    if baseline_wt is not None and final_wt is not None:
+        base_med = baseline_wt.median_seconds
+        final_med = final_wt.median_seconds
         delta = (base_med - final_med) / base_med if base_med > 0 else 0
         rows.append(
             (
@@ -369,29 +429,35 @@ def _measurements_table(loop_result: LoopResult, metric_name: str) -> str:
         rows.append(
             (
                 "Wallclock best (µs)",
-                f"{b.walltime.best_seconds * 1e6:.2f}",
-                f"{fwt.best_seconds * 1e6:.2f}",
+                f"{baseline_wt.best_seconds * 1e6:.2f}",
+                f"{final_wt.best_seconds * 1e6:.2f}",
                 "",
             )
         )
         rows.append(
             (
                 "Wallclock stddev (µs)",
-                f"{b.walltime.stddev_seconds * 1e6:.2f}",
-                f"{fwt.stddev_seconds * 1e6:.2f}",
+                f"{baseline_wt.stddev_seconds * 1e6:.2f}",
+                f"{final_wt.stddev_seconds * 1e6:.2f}",
                 "",
             )
         )
     if not rows:
         return "_(no measurements recorded)_"
-    header = "| Metric | Baseline | After | Δ |"
+    header = f"| Metric | Baseline | {after_label} | Δ |"
     sep = "|---|---|---|---|"
     body = "\n".join(f"| {a} | {b_} | {c} | {d} |" for a, b_, c, d in rows)
     note = ""
-    if loop_result.final_walltime is not None:
+    if final_wt is not None:
         note = (
-            f"\n\nWallclock measured over {loop_result.final_walltime.repeats} repeats "
-            f"of {loop_result.final_walltime.iterations_per_repeat} iterations each."
+            f"\n\nWallclock measured over {final_wt.repeats} repeats "
+            f"of {final_wt.iterations_per_repeat} iterations each."
+        )
+    if attempt_reverted:
+        note += (
+            "\n\n_“After” reflects the tested-but-unaccepted attempt measured "
+            "with the patch applied; it was reverted, so the current tree matches "
+            "“Baseline”._"
         )
     return f"{header}\n{sep}\n{body}{note}"
 

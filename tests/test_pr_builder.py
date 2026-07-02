@@ -153,7 +153,7 @@ def test_title_no_survivors(tmp_path: Path):
         model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
-    assert pr.title == "spinwright / test_foo / no improvements"
+    assert pr.title == "spinwright / test_foo / no improvements / claude-opus-4-7"
 
 
 def test_review_attempt_published_when_no_survivors(tmp_path: Path):
@@ -184,6 +184,45 @@ def test_review_attempt_published_when_no_survivors(tmp_path: Path):
     assert "Replaced the comprehension" in pr.body  # the model's reasoning
     assert "below threshold" in pr.body  # why it wasn't accepted
     assert "```diff" in pr.body  # the change itself
+
+
+def test_review_attempt_measurements_show_attempt_before_after(tmp_path: Path):
+    """Regression: a reverted review attempt must render *its own* before/after
+    in the Measurements table, not baseline-vs-final. Because the attempt was
+    reverted, ``final_walltime``/``final_callgrind`` equal the baseline, so the
+    old code produced an all-zero (−0.0%) table that contradicted the title's
+    reported delta — impossible even for wallclock. See PR #1175."""
+    attempt = _iteration(
+        accepted=False,
+        diff=_DIFF_ONE_FILE,
+        walltime_delta=0.206,
+        callgrind_delta=0.152,
+        gate="callgrind_instructions",
+        final_text="Sorted once and aggregated over contiguous slices.",
+    )
+    attempt.rejection_reason = (
+        "Callgrind instructions improvement 15.20% is below threshold 20%"
+    )
+    # The loop reverted the attempt: final state == baseline, byte-identical.
+    loop = _loop_result(attempt, final_wt=_wt(1.0), final_cg=_cg(1_000_000))
+    pr = builder.build_pr(
+        loop_result=loop,
+        regression=None,
+        extraction=_meta(tmp_path),
+        run_id="r1",
+        model="anthropic/claude-opus-4-8",
+        repo_dir=tmp_path,
+        review_attempts=(attempt,),
+    )
+    # Title reports the attempt's reduction...
+    assert "-15%" in pr.title
+    # ...and the table now backs it with the attempt's real before/after.
+    assert "After (reverted attempt)" in pr.body
+    assert "1,000,000" in pr.body  # baseline callgrind
+    assert "848,000" in pr.body  # candidate callgrind (1_000_000 * (1 - 0.152))
+    assert "−15.2%" in pr.body  # non-zero delta, consistent with the title
+    # The old bug: baseline == after everywhere, i.e. a −0.0% callgrind row.
+    assert "| 1,000,000 | 1,000,000 |" not in pr.body
 
 
 def test_review_attempt_ignored_when_a_survivor_exists(tmp_path: Path):
@@ -229,7 +268,7 @@ def test_title_single_survivor_uses_fixed_three_segment_form(tmp_path: Path):
         model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
-    assert pr.title == "spinwright / test_foo / -30%"
+    assert pr.title == "spinwright / test_foo / -30% / claude-opus-4-7"
 
 
 def test_title_multi_survivor_uses_total_delta(tmp_path: Path):
@@ -250,7 +289,25 @@ def test_title_multi_survivor_uses_total_delta(tmp_path: Path):
         model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
-    assert pr.title == "spinwright / test_foo / -50%"
+    assert pr.title == "spinwright / test_foo / -50% / claude-opus-4-7"
+
+
+def test_title_ends_with_short_model_name(tmp_path: Path):
+    """The trailing title segment is the model's short name — the part after any
+    ``provider/`` prefix (e.g. ``ollama/kimi-k2.7-code`` → ``kimi-k2.7-code``)."""
+    loop = _loop_result(
+        _iteration(accepted=True, diff=_DIFF_ONE_FILE, walltime_delta=0.30, sha="aaa"),
+        final_wt=_wt(0.70),
+    )
+    pr = builder.build_pr(
+        loop_result=loop,
+        regression=None,
+        extraction=_meta(tmp_path),
+        run_id="r1",
+        model="ollama/kimi-k2.7-code",
+        repo_dir=tmp_path,
+    )
+    assert pr.title == "spinwright / test_foo / -30% / kimi-k2.7-code"
 
 
 def test_title_callgrind_delta_unitless(tmp_path: Path):
@@ -278,7 +335,7 @@ def test_title_callgrind_delta_unitless(tmp_path: Path):
         model="claude-opus-4-7",
         repo_dir=tmp_path,
     )
-    assert pr.title == "spinwright / test_foo / -40%"
+    assert pr.title == "spinwright / test_foo / -40% / claude-opus-4-7"
 
 
 # ---------------------------------------------------------------------------
